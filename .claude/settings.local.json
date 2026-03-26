@@ -29,7 +29,10 @@
       "Bash(powershell -ExecutionPolicy Bypass -Command \"Set-Location ''D:\\\\saass tool''; Remove-Item ''sync-result.txt'' -Force; Remove-Item ''sync.ps1'' -Force; git add -A; git status\")",
       "Bash(\"D:\\\\saass tool\\\\final.txt\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\push.ps1\")",
-      "Bash(\"D:\\\\saass tool\\\\r.txt\")"
+      "Bash(\"D:\\\\saass tool\\\\r.txt\")",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"Set-Location ''D:\\\\saass tool''; git rm --cached final.txt; git rm --cached r.txt 2>$null; git add -A; git commit -m ''chore: untrack temp txt files''; git push origin main\")",
+      "Bash(\"D:\\\\saass tool\\\\done.log\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\cleanup.ps1\")"
     ]
   }
 }
