@@ -1,8 +1,25 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Lazy initialization — prevents crash on startup when API keys are missing
+let _anthropic: Anthropic | null = null;
+let _openai: OpenAI | null = null;
+
+function getAnthropic(): Anthropic {
+  if (!_anthropic) {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
+    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return _anthropic;
+}
+
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set');
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 
 export type AIProvider = 'claude' | 'openai';
 
@@ -90,7 +107,7 @@ Remember: The optimized content must read naturally to humans while being strate
 export async function optimizeWithClaude(input: OptimizationInput): Promise<OptimizationResult> {
   const prompt = buildSEOPrompt(input);
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
@@ -115,7 +132,7 @@ export async function optimizeWithClaude(input: OptimizationInput): Promise<Opti
 export async function optimizeWithOpenAI(input: OptimizationInput): Promise<OptimizationResult> {
   const prompt = buildSEOPrompt(input);
 
-  const response = await openai.chat.completions.create({
+  const response = await getOpenAI().chat.completions.create({
     model: 'gpt-4o',
     max_tokens: 4096,
     messages: [
@@ -171,7 +188,7 @@ export async function generateMetaTags(
   primaryKeyword: string,
   pageTitle?: string
 ): Promise<{ title: string; description: string; ogTitle: string; ogDescription: string }> {
-  const response = await anthropic.messages.create({
+  const response = await getAnthropic().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
     messages: [
