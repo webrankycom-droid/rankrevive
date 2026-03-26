@@ -17,7 +17,15 @@
       "Bash(cmd /c \"D:\\\\saass tool\\\\do-commit.cmd\")",
       "Bash(\"D:\\\\saass tool\\\\push-log.txt\")",
       "Bash(cmd /c \"cd /d \"\"D:\\\\saass tool\"\" && git add -A && git commit -m \"\"Initial RankRevive scaffold\"\" && git push origin main --force\")",
-      "Bash(powershell -Command \"Set-Location ''D:\\\\saass tool''; git add -A; git status\")"
+      "Bash(powershell -Command \"Set-Location ''D:\\\\saass tool''; git add -A; git status\")",
+      "Bash(powershell -Command \"Set-Location ''D:\\\\saass tool''; git commit -m ''Initial scaffold: RankRevive AI-powered SEO Recovery SaaS''; git push origin main --force\")",
+      "Bash(powershell -Command \"Set-Location ''D:\\\\saass tool''; git config user.email ''webrankycom@gmail.com''; git config user.name ''webrankycom-droid''; git commit -m ''Initial scaffold: RankRevive AI-powered SEO Recovery SaaS''; git push origin main --force\")",
+      "Bash(powershell -Command \"[System.Convert]::ToBase64String\\([System.Security.Cryptography.RandomNumberGenerator]::GetBytes\\(48\\)\\)\")",
+      "Bash(\"D:\\\\saass tool\\\\secrets.txt\")",
+      "Bash(powershell -Command \"$rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider; $bytes = New-Object byte[] 48; $rng.GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\)\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\gen-secrets.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\sync.ps1\")",
+      "Bash(\"D:\\\\saass tool\\\\sync-result.txt\")"
     ]
   }
 }
