@@ -1,0 +1,211 @@
+import { Router, Response } from 'express';
+import { authenticate, AuthRequest } from '../middleware/auth';
+import { gscService } from '../services/gscService';
+import { query, queryOne } from '../db';
+
+const router = Router();
+
+// GET /api/gsc/auth-url - Get Google OAuth URL
+router.get('/auth-url', authenticate, (req: AuthRequest, res: Response): void => {
+  const url = gscService.getAuthUrl(req.user!.userId);
+  res.json({ url });
+});
+
+// GET /api/gsc/callback - OAuth callback
+router.get('/callback', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { code, state, siteId } = req.query as { code: string; state: string; siteId: string };
+
+  if (state !== req.user!.userId) {
+    res.status(400).json({ error: 'State mismatch' });
+    return;
+  }
+
+  try {
+    const { accessToken, refreshToken } = await gscService.exchangeCodeForTokens(code);
+
+    if (siteId) {
+      await query(
+        'UPDATE sites SET gsc_access_token = $1, gsc_refresh_token = $2 WHERE id = $3 AND user_id = $4',
+        [accessToken, refreshToken, siteId, req.user!.userId]
+      );
+    }
+
+    res.json({ success: true, accessToken, refreshToken });
+  } catch (err) {
+    console.error('GSC OAuth callback error:', err);
+    res.status(500).json({ error: 'Failed to exchange code for tokens' });
+  }
+});
+
+// GET /api/gsc/properties - List GSC properties
+router.get('/properties', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { siteId } = req.query as { siteId: string };
+
+  const site = await queryOne<{ gsc_access_token: string; gsc_refresh_token: string }>(
+    'SELECT gsc_access_token, gsc_refresh_token FROM sites WHERE id = $1 AND user_id = $2',
+    [siteId, req.user!.userId]
+  );
+
+  if (!site?.gsc_access_token) {
+    res.status(400).json({ error: 'Google Search Console not connected for this site' });
+    return;
+  }
+
+  try {
+    const properties = await gscService.listProperties(site.gsc_access_token, site.gsc_refresh_token);
+    res.json({ properties });
+  } catch (err) {
+    console.error('List GSC properties error:', err);
+    res.status(500).json({ error: 'Failed to fetch GSC properties' });
+  }
+});
+
+// POST /api/gsc/sync/:siteId - Sync pages from GSC
+router.post('/sync/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { siteId } = req.params;
+
+  // Verify ownership
+  const site = await queryOne(
+    'SELECT id FROM sites WHERE id = $1 AND user_id = $2',
+    [siteId, req.user!.userId]
+  );
+
+  if (!site) {
+    res.status(404).json({ error: 'Site not found' });
+    return;
+  }
+
+  try {
+    const result = await gscService.syncSitePages(siteId);
+    res.json({ success: true, ...result });
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('GSC sync error:', err);
+    res.status(500).json({ error: error.message || 'Sync failed' });
+  }
+});
+
+// GET /api/gsc/keywords/:pageId - Get keywords for a page
+router.get('/keywords/:pageId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { pageId } = req.params;
+
+  const page = await queryOne<{ url: string; site_id: string }>(
+    `SELECT p.url, p.site_id FROM pages p
+     JOIN sites s ON p.site_id = s.id
+     WHERE p.id = $1 AND s.user_id = $2`,
+    [pageId, req.user!.userId]
+  );
+
+  if (!page) {
+    res.status(404).json({ error: 'Page not found' });
+    return;
+  }
+
+  const site = await queryOne<{
+    gsc_property: string;
+    gsc_access_token: string;
+    gsc_refresh_token: string;
+  }>(
+    'SELECT gsc_property, gsc_access_token, gsc_refresh_token FROM sites WHERE id = $1',
+    [page.site_id]
+  );
+
+  if (!site?.gsc_access_token) {
+    res.status(400).json({ error: 'GSC not configured' });
+    return;
+  }
+
+  try {
+    const keywords = await gscService.fetchKeywordsForPage(
+      page.url,
+      site.gsc_property,
+      site.gsc_access_token,
+      site.gsc_refresh_token
+    );
+    res.json({ keywords });
+  } catch (err) {
+    console.error('Fetch keywords error:', err);
+    res.status(500).json({ error: 'Failed to fetch keywords' });
+  }
+});
+
+// GET /api/gsc/overview/:siteId - Traffic overview
+router.get('/overview/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { siteId } = req.params;
+
+  const site = await queryOne<{
+    gsc_property: string;
+    gsc_access_token: string;
+    gsc_refresh_token: string;
+  }>(
+    'SELECT gsc_property, gsc_access_token, gsc_refresh_token FROM sites WHERE id = $1 AND user_id = $2',
+    [siteId, req.user!.userId]
+  );
+
+  if (!site?.gsc_access_token) {
+    res.status(400).json({ error: 'GSC not configured' });
+    return;
+  }
+
+  try {
+    const pages = await gscService.fetchAllPages(
+      siteId,
+      site.gsc_access_token,
+      site.gsc_refresh_token,
+      site.gsc_property
+    );
+
+    const totalClicks = pages.reduce((sum, p) => sum + p.clicks, 0);
+    const totalImpressions = pages.reduce((sum, p) => sum + p.impressions, 0);
+    const avgPosition = pages.length > 0
+      ? pages.reduce((sum, p) => sum + p.position, 0) / pages.length
+      : 0;
+
+    res.json({
+      totalClicks,
+      totalImpressions,
+      avgPosition: parseFloat(avgPosition.toFixed(1)),
+      totalPages: pages.length,
+      topPages: pages.slice(0, 10),
+    });
+  } catch (err) {
+    console.error('GSC overview error:', err);
+    res.status(500).json({ error: 'Failed to fetch overview' });
+  }
+});
+
+// GET /api/gsc/daily/:siteId - Get 30-day daily traffic data for chart
+router.get('/daily/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { siteId } = req.params;
+  const days = Math.min(parseInt(req.query.days as string) || 30, 90);
+
+  const site = await queryOne<{
+    gsc_property: string;
+    gsc_access_token: string;
+    gsc_refresh_token: string;
+  }>(
+    'SELECT gsc_property, gsc_access_token, gsc_refresh_token FROM sites WHERE id = $1 AND user_id = $2',
+    [siteId, req.user!.userId]
+  );
+
+  if (!site?.gsc_access_token) {
+    res.status(400).json({ error: 'GSC not configured' });
+    return;
+  }
+
+  try {
+    const data = await gscService.fetchDailyTraffic(
+      siteId,
+      site.gsc_access_token,
+      site.gsc_refresh_token,
+      site.gsc_property,
+      days
+    );
+    res.json({ data });
+  } catch (err) {
+    console.error('GSC daily traffic error:', err);
+    res.status(500).json({ error: 'Failed to fetch daily traffic data' });
+  }
+});
+
+export default router;

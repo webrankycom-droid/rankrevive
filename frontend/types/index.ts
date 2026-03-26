@@ -1,0 +1,214 @@
+// ─── User & Auth ─────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string;
+  plan: 'starter' | 'pro' | 'agency';
+  isAdmin: boolean;
+  pagesUsedThisMonth: number;
+  createdAt: string;
+}
+
+export interface AuthToken {
+  token: string;
+  user: User;
+}
+
+// ─── Sites ────────────────────────────────────────────────────────────────────
+
+export interface Site {
+  id: string;
+  userId: string;
+  domain: string;
+  gscProperty?: string;
+  wpUrl?: string;
+  wpUsername?: string;
+  pageCount?: number;
+  createdAt: string;
+}
+
+// ─── Pages ───────────────────────────────────────────────────────────────────
+
+export type PageStatus = 'pending' | 'synced' | 'optimized' | 'published';
+
+export interface Page {
+  id: string;
+  siteId: string;
+  url: string;
+  title?: string;
+  currentContent?: string;
+  optimizedContent?: string;
+  status: PageStatus;
+  contentScore?: number;
+  lastSyncedAt?: string;
+  lastOptimizedAt?: string;
+  createdAt: string;
+  // Joined fields
+  domain?: string;
+  wpUrl?: string;
+  keywordCount?: number;
+  totalImpressions?: number;
+  totalClicks?: number;
+  avgPosition?: number;
+}
+
+// ─── Keywords ────────────────────────────────────────────────────────────────
+
+export interface Keyword {
+  id: string;
+  pageId: string;
+  keyword: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number;
+  dateRange?: string;
+}
+
+// ─── Optimizations ───────────────────────────────────────────────────────────
+
+export type OptimizationStatus = 'draft' | 'draft_wp' | 'published';
+export type AIProvider = 'claude' | 'openai';
+
+export interface Optimization {
+  id: string;
+  pageId: string;
+  userId: string;
+  originalContent: string;
+  optimizedContent: string;
+  aiProvider: AIProvider;
+  contentScoreBefore: number;
+  contentScoreAfter: number;
+  status: OptimizationStatus;
+  publishedAt?: string;
+  wpPostId?: number;
+  createdAt: string;
+  // Joined
+  pageUrl?: string;
+  pageTitle?: string;
+  domain?: string;
+}
+
+// ─── Content Scoring ─────────────────────────────────────────────────────────
+
+export interface ScoreMetric {
+  score: number;
+  maxScore: number;
+  label: string;
+  description: string;
+  recommendation?: string;
+}
+
+export interface ContentScoreBreakdown {
+  total: number;
+  metrics: {
+    keywordDensity: ScoreMetric;
+    readability: ScoreMetric;
+    headingStructure: ScoreMetric;
+    eeeatSignals: ScoreMetric;
+    wordCount: ScoreMetric;
+    faqPresence: ScoreMetric;
+    internalLinks: ScoreMetric;
+    paragraphStructure: ScoreMetric;
+    titleOptimization: ScoreMetric;
+    multimediaPresence: ScoreMetric;
+  };
+}
+
+// ─── API Responses ───────────────────────────────────────────────────────────
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ApiError {
+  error: string;
+  errors?: Array<{ msg: string; path: string }>;
+}
+
+export interface OptimizationResult {
+  optimizationId: string;
+  optimizedContent: string;
+  originalContent: string;
+  provider: AIProvider;
+  suggestions: string[];
+  targetedKeywords: string[];
+  scoreBreakdown: {
+    before: ContentScoreBreakdown;
+    after: ContentScoreBreakdown;
+    improvement: number;
+  };
+  tokensUsed: number;
+}
+
+// ─── Dashboard Stats ─────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  totalPages: number;
+  optimizedPages: number;
+  publishedPages: number;
+  avgPosition: number;
+  totalImpressions: number;
+  totalClicks: number;
+  avgContentScore: number;
+  pagesUsedThisMonth: number;
+  planLimit: number;
+}
+
+// ─── Stripe / Billing ────────────────────────────────────────────────────────
+
+export interface SubscriptionStatus {
+  plan: string;
+  status: string;
+  currentPeriodEnd: string | null;
+  pagesUsed: number;
+  pagesLimit: number;
+}
+
+export interface Plan {
+  name: string;
+  price: number;
+  pagesPerMonth: number;
+  features: string[];
+}
+
+// ─── Admin ───────────────────────────────────────────────────────────────────
+
+export interface AdminStats {
+  users: {
+    total: number;
+    starter: number;
+    pro: number;
+    agency: number;
+    newToday: number;
+  };
+  pages: {
+    total: number;
+    optimized: number;
+    published: number;
+    totalOptimizations: number;
+  };
+  sites: { total: number };
+  recentOptimizations: Optimization[];
+}
+
+// ─── GSC ─────────────────────────────────────────────────────────────────────
+
+export interface GSCOverview {
+  totalClicks: number;
+  totalImpressions: number;
+  avgPosition: number;
+  totalPages: number;
+  topPages: Array<{
+    url: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+  }>;
+}

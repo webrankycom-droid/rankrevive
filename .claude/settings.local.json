@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /S /B \"D:/saass tool/\")",
+      "Bash(cmd /c \"dir /B /S \"\"D:\\\\saass tool\"\"\")",
+      "Bash(git -C \"D:/saass tool\" status)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npm install:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(echo \"exit=$?\")",
+      "Bash(echo \"DONE:$?\")",
+      "Bash(npx next:*)",
+      "Bash(npm --prefix frontend run dev)",
+      "Bash(node -e \"require\\(''next''\\)\")",
+      "Bash(echo \"exit:$?\")",
+      "Read(//tmp/**)",
+      "Bash(cmd /c \"D:\\\\saass tool\\\\do-commit.cmd\")",
+      "Bash(\"D:\\\\saass tool\\\\push-log.txt\")",
+      "Bash(cmd /c \"cd /d \"\"D:\\\\saass tool\"\" && git add -A && git commit -m \"\"Initial RankRevive scaffold\"\" && git push origin main --force\")",
+      "Bash(powershell -Command \"Set-Location ''D:\\\\saass tool''; git add -A; git status\")"
+    ]
+  }
+}
