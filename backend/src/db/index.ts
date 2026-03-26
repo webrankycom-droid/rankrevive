@@ -6,12 +6,13 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 5000,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
 pool.on('error', (err) => {
-  console.error('Unexpected PostgreSQL pool error:', err);
-  process.exit(-1);
+  console.error('Unexpected PostgreSQL pool error (non-fatal):', err.message);
+  // Do NOT exit — Supabase closes idle connections which triggers this event
 });
 
 // Redis client
