@@ -34,7 +34,8 @@
       "Bash(\"D:\\\\saass tool\\\\done.log\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\cleanup.ps1\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\check.ps1\")",
-      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\final-push.ps1\")"
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\final-push.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\deploy-push.ps1\")"
     ]
   }
 }
