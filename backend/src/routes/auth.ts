@@ -213,14 +213,20 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
       name: string;
       plan: string;
       is_admin: boolean;
+      avatar_url: string;
     }>(
-      'INSERT INTO users (email, name, avatar_url, plan) VALUES ($1, $2, $3, $4) RETURNING id, email, name, plan, is_admin',
+      'INSERT INTO users (email, name, avatar_url, plan) VALUES ($1, $2, $3, $4) RETURNING id, email, name, plan, is_admin, avatar_url',
       [email, name || email.split('@')[0], avatarUrl || null, 'starter']
     );
     user = newUser;
-  } else if (avatarUrl && !user.avatar_url) {
+  } else if (avatarUrl && user && !user.avatar_url) {
     // Update avatar if not set
     await query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, user.id]);
+  }
+
+  if (!user) {
+    res.status(500).json({ error: 'Failed to create or find user' });
+    return;
   }
 
   const token = signToken(user.id, user.email, user.is_admin);
