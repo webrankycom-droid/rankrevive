@@ -34,3 +34,9 @@ redis_data/
 
 # TypeScript
 *.tsbuildinfo
+
+# Temp / local scripts
+*.txt
+*.ps1
+sync.ps1
+gen-secrets.ps1

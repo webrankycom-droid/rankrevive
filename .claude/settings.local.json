@@ -25,7 +25,11 @@
       "Bash(powershell -Command \"$rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider; $bytes = New-Object byte[] 48; $rng.GetBytes\\($bytes\\); [Convert]::ToBase64String\\($bytes\\)\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\gen-secrets.ps1\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\sync.ps1\")",
-      "Bash(\"D:\\\\saass tool\\\\sync-result.txt\")"
+      "Bash(\"D:\\\\saass tool\\\\sync-result.txt\")",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"Set-Location ''D:\\\\saass tool''; Remove-Item ''sync-result.txt'' -Force; Remove-Item ''sync.ps1'' -Force; git add -A; git status\")",
+      "Bash(\"D:\\\\saass tool\\\\final.txt\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\push.ps1\")",
+      "Bash(\"D:\\\\saass tool\\\\r.txt\")"
     ]
   }
 }
