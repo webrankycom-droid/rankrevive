@@ -2,9 +2,15 @@ import Stripe from 'stripe';
 import { Request, Response } from 'express';
 import { query, queryOne } from '../db';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-});
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY;
+    if (!key) throw new Error('STRIPE_SECRET_KEY is not set');
+    _stripe = new Stripe(key, { apiVersion: '2024-06-20' });
+  }
+  return _stripe;
+}
 
 export const PLANS = {
   starter: {
@@ -44,7 +50,7 @@ export async function createOrGetCustomer(
 
   if (user?.stripe_customer_id) return user.stripe_customer_id;
 
-  const customer = await stripe.customers.create({
+  const customer = await getStripe().customers.create({
     email,
     name: name || undefined,
     metadata: { userId },
@@ -70,7 +76,7 @@ export async function createCheckoutSession(
 
   const customerId = await createOrGetCustomer(userId, email);
 
-  const session = await stripe.checkout.sessions.create({
+  const session = await getStripe().checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
     payment_method_types: ['card'],
@@ -100,7 +106,7 @@ export async function createPortalSession(
     throw new Error('No Stripe customer found');
   }
 
-  const session = await stripe.billingPortal.sessions.create({
+  const session = await getStripe().billingPortal.sessions.create({
     customer: user.stripe_customer_id,
     return_url: returnUrl,
   });
@@ -136,7 +142,7 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
+    event = getStripe().webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET!
