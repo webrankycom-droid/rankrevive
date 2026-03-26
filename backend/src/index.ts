@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import dns from 'dns';
+// Force IPv4 — Railway cannot reach Supabase via IPv6
+dns.setDefaultResultOrder('ipv4first');
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -16,6 +20,9 @@ import { errorHandler } from './middleware/auth';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 4000;
+
+// Trust Railway's proxy (fixes X-Forwarded-For for rate limiting)
+app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet());
