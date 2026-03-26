@@ -1,4 +1,16 @@
 import 'dotenv/config';
+
+// Global crash handler — keeps Railway logs visible
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH] Uncaught Exception:', err.message);
+  console.error(err.stack);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRASH] Unhandled Rejection:', reason);
+  process.exit(1);
+});
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
