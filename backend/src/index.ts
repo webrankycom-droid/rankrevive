@@ -90,7 +90,7 @@ app.use((_req, res) => {
 // Global error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`RankRevive API running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
