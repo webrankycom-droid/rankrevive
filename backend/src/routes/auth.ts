@@ -26,28 +26,34 @@ router.post(
     body('name').trim().notEmpty().withMessage('Name is required'),
   ],
   async (req: Request, res: Response): Promise<void> => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      res.status(422).json({ errors: errors.array() });
-      return;
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(422).json({ errors: errors.array() });
+        return;
+      }
+
+      const { email, password, name } = req.body;
+
+      const existing = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
+      if (existing) {
+        res.status(409).json({ error: 'Email already registered' });
+        return;
+      }
+
+      const passwordHash = await bcrypt.hash(password, 12);
+      const [user] = await query<{ id: string; email: string; is_admin: boolean }>(
+        'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, is_admin',
+        [email, name, passwordHash]
+      );
+
+      const token = signToken(user.id, user.email, user.is_admin);
+      res.status(201).json({ token, user: { id: user.id, email: user.email, name, plan: 'starter' } });
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('[REGISTER ERROR]', error.message);
+      res.status(500).json({ error: 'Registration failed', detail: error.message });
     }
-
-    const { email, password, name } = req.body;
-
-    const existing = await queryOne('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing) {
-      res.status(409).json({ error: 'Email already registered' });
-      return;
-    }
-
-    const passwordHash = await bcrypt.hash(password, 12);
-    const [user] = await query<{ id: string; email: string; is_admin: boolean }>(
-      'INSERT INTO users (email, name, password_hash) VALUES ($1, $2, $3) RETURNING id, email, is_admin',
-      [email, name, passwordHash]
-    );
-
-    const token = signToken(user.id, user.email, user.is_admin);
-    res.status(201).json({ token, user: { id: user.id, email: user.email, name, plan: 'starter' } });
   }
 );
 
