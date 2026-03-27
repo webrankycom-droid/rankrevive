@@ -93,6 +93,14 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Settings table (admin-configurable API keys and config)
+CREATE TABLE IF NOT EXISTS settings (
+  key VARCHAR(255) PRIMARY KEY,
+  value TEXT NOT NULL,
+  label VARCHAR(255),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_sites_user_id ON sites(user_id);
 CREATE INDEX IF NOT EXISTS idx_pages_site_id ON pages(site_id);
