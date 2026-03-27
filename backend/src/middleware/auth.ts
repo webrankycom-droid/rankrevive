@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { queryOne } from '../db';
+import { supabase } from '../db';
 
 export interface JwtPayload {
   userId: string;
@@ -51,10 +51,11 @@ export async function requireActiveSubscription(
     return;
   }
 
-  const user = await queryOne<{ plan: string; pages_used_this_month: number }>(
-    'SELECT plan, pages_used_this_month FROM users WHERE id = $1',
-    [req.user.userId]
-  );
+  const { data: user } = await supabase
+    .from('users')
+    .select('plan, pages_used_this_month')
+    .eq('id', req.user.userId)
+    .maybeSingle();
 
   if (!user) {
     res.status(401).json({ error: 'User not found' });

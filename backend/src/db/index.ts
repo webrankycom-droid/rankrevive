@@ -2,24 +2,29 @@ import { createClient } from '@supabase/supabase-js';
 import Redis from 'ioredis';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://neksmycluzwhmvsfowxy.supabase.co';
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// Supabase client — uses HTTPS (PostgREST) instead of direct TCP PostgreSQL
-// This avoids Railway's IPv6 limitation with Supabase direct connections
-export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+// Supabase client — uses HTTPS instead of direct TCP PostgreSQL
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Generic query helper using Supabase RPC for raw SQL
+// Raw SQL via exec_sql Supabase function (handles all query types)
 export async function query<T = Record<string, unknown>>(
   text: string,
   params?: unknown[]
 ): Promise<T[]> {
+  // Convert all params to strings (null stays null for SQL NULL handling)
+  const stringParams: (string | null)[] = (params || []).map(p =>
+    p === null || p === undefined ? null : String(p)
+  );
+
   const { data, error } = await supabase.rpc('exec_sql', {
     query_text: text,
-    query_params: params || [],
+    query_params: stringParams,
   });
-  if (error) throw new Error(error.message);
+
+  if (error) throw new Error(`DB Error: ${error.message}`);
   return (data as T[]) || [];
 }
 
@@ -32,7 +37,7 @@ export async function queryOne<T = Record<string, unknown>>(
   return rows[0] ?? null;
 }
 
-// Transaction helper (basic — runs queries sequentially)
+// Transaction helper (simplified — runs callback with supabase client)
 export async function withTransaction<T>(
   callback: (client: typeof supabase) => Promise<T>
 ): Promise<T> {
@@ -58,10 +63,7 @@ export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379'
     return Math.min(times * 100, 1000);
   },
 });
-
-redis.on('error', () => {
-  // Redis is optional — silently ignore connection errors
-});
+redis.on('error', () => { /* Redis is optional */ });
 
 export async function cacheGet<T>(key: string): Promise<T | null> {
   try {
@@ -72,17 +74,14 @@ export async function cacheGet<T>(key: string): Promise<T | null> {
 }
 
 export async function cacheSet(key: string, value: unknown, ttlSeconds = 300): Promise<void> {
-  try {
-    await redis.setex(key, ttlSeconds, JSON.stringify(value));
-  } catch { /* Redis optional */ }
+  try { await redis.setex(key, ttlSeconds, JSON.stringify(value)); } catch { /* optional */ }
 }
 
 export async function cacheDel(pattern: string): Promise<void> {
   try {
     const keys = await redis.keys(pattern);
     if (keys.length > 0) await redis.del(...keys);
-  } catch { /* Redis optional */ }
+  } catch { /* optional */ }
 }
 
-// Keep pg pool as fallback export for compatibility
 export default supabase;
