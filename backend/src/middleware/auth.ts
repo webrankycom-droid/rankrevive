@@ -51,6 +51,11 @@ export async function requireActiveSubscription(
     return;
   }
 
+  // Admins bypass subscription limits
+  if (req.user.isAdmin) {
+    return next();
+  }
+
   const { data: user } = await supabase
     .from('users')
     .select('plan, pages_used_this_month')

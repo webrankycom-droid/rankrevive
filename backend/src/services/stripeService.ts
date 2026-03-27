@@ -2,14 +2,29 @@ import Stripe from 'stripe';
 import { Request, Response } from 'express';
 import { query, queryOne } from '../db';
 
-let _stripe: Stripe | null = null;
-function getStripe(): Stripe {
-  if (!_stripe) {
-    const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) throw new Error('STRIPE_SECRET_KEY is not set');
-    _stripe = new Stripe(key, { apiVersion: '2024-06-20' });
+const _stripeKeyCache: { key?: string; expires?: number } = {};
+
+async function getStripeKey(): Promise<string> {
+  if (process.env.STRIPE_SECRET_KEY) return process.env.STRIPE_SECRET_KEY;
+  if (_stripeKeyCache.key && _stripeKeyCache.expires && _stripeKeyCache.expires > Date.now()) {
+    return _stripeKeyCache.key;
   }
-  return _stripe;
+  const row = await queryOne<{ value: string }>('SELECT value FROM settings WHERE key = $1', ['STRIPE_SECRET_KEY']);
+  if (!row?.value) throw new Error('STRIPE_SECRET_KEY is not configured. Set it in Admin → Configuration.');
+  _stripeKeyCache.key = row.value;
+  _stripeKeyCache.expires = Date.now() + 5 * 60 * 1000;
+  return row.value;
+}
+
+async function getStripe(): Promise<Stripe> {
+  const key = await getStripeKey();
+  return new Stripe(key, { apiVersion: '2024-06-20' });
+}
+
+async function getPriceId(envVar: string): Promise<string> {
+  if (process.env[envVar]) return process.env[envVar]!;
+  const row = await queryOne<{ value: string }>('SELECT value FROM settings WHERE key = $1', [envVar]);
+  return row?.value || '';
 }
 
 export const PLANS = {
@@ -50,7 +65,8 @@ export async function createOrGetCustomer(
 
   if (user?.stripe_customer_id) return user.stripe_customer_id;
 
-  const customer = await getStripe().customers.create({
+  const stripe = await getStripe();
+  const customer = await stripe.customers.create({
     email,
     name: name || undefined,
     metadata: { userId },
@@ -76,11 +92,13 @@ export async function createCheckoutSession(
 
   const customerId = await createOrGetCustomer(userId, email);
 
-  const session = await getStripe().checkout.sessions.create({
+  const priceId = await getPriceId(`STRIPE_${planName.toUpperCase()}_PRICE_ID`);
+  const stripe = await getStripe();
+  const session = await stripe.checkout.sessions.create({
     customer: customerId,
     mode: 'subscription',
     payment_method_types: ['card'],
-    line_items: [{ price: plan.priceId, quantity: 1 }],
+    line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: cancelUrl,
     metadata: { userId, planName },
@@ -106,7 +124,8 @@ export async function createPortalSession(
     throw new Error('No Stripe customer found');
   }
 
-  const session = await getStripe().billingPortal.sessions.create({
+  const stripe = await getStripe();
+  const session = await stripe.billingPortal.sessions.create({
     customer: user.stripe_customer_id,
     return_url: returnUrl,
   });
@@ -142,10 +161,14 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
 
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(
+    const stripe = await getStripe();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+      || (await queryOne<{ value: string }>('SELECT value FROM settings WHERE key = $1', ['STRIPE_WEBHOOK_SECRET']))?.value
+      || '';
+    event = stripe.webhooks.constructEvent(
       req.body,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
   } catch (err: unknown) {
     const error = err as Error;

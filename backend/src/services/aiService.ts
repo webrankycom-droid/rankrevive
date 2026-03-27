@@ -1,24 +1,35 @@
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { queryOne } from '../db';
 
-// Lazy initialization — prevents crash on startup when API keys are missing
-let _anthropic: Anthropic | null = null;
-let _openai: OpenAI | null = null;
+// Cache DB-sourced API keys for 5 minutes to avoid repeated DB hits
+const _keyCache: Record<string, { value: string; expires: number }> = {};
 
-function getAnthropic(): Anthropic {
-  if (!_anthropic) {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set');
-    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+async function getApiKey(envVar: string): Promise<string> {
+  if (process.env[envVar]) return process.env[envVar]!;
+  const cached = _keyCache[envVar];
+  if (cached && cached.expires > Date.now()) return cached.value;
+  const row = await queryOne<{ value: string }>('SELECT value FROM settings WHERE key = $1', [envVar]);
+  if (!row?.value) {
+    throw new Error(`${envVar} is not configured. Go to Admin → Configuration to add it.`);
   }
-  return _anthropic;
+  _keyCache[envVar] = { value: row.value, expires: Date.now() + 5 * 60 * 1000 };
+  return row.value;
 }
 
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set');
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return _openai;
+// Clear cached keys so next call re-reads from DB (called after admin saves settings)
+export function clearApiKeyCache(): void {
+  Object.keys(_keyCache).forEach((k) => delete _keyCache[k]);
+}
+
+async function getAnthropic(): Promise<Anthropic> {
+  const apiKey = await getApiKey('ANTHROPIC_API_KEY');
+  return new Anthropic({ apiKey });
+}
+
+async function getOpenAI(): Promise<OpenAI> {
+  const apiKey = await getApiKey('OPENAI_API_KEY');
+  return new OpenAI({ apiKey });
 }
 
 export type AIProvider = 'claude' | 'openai';
@@ -106,8 +117,9 @@ Remember: The optimized content must read naturally to humans while being strate
 
 export async function optimizeWithClaude(input: OptimizationInput): Promise<OptimizationResult> {
   const prompt = buildSEOPrompt(input);
+  const client = await getAnthropic();
 
-  const response = await getAnthropic().messages.create({
+  const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
@@ -116,8 +128,6 @@ export async function optimizeWithClaude(input: OptimizationInput): Promise<Opti
 
   const textBlock = response.content.find((b) => b.type === 'text');
   const optimizedContent = textBlock?.text || '';
-
-  // Extract suggestions from the response
   const suggestions = extractSuggestions(optimizedContent, input.keywords);
 
   return {
@@ -131,8 +141,9 @@ export async function optimizeWithClaude(input: OptimizationInput): Promise<Opti
 
 export async function optimizeWithOpenAI(input: OptimizationInput): Promise<OptimizationResult> {
   const prompt = buildSEOPrompt(input);
+  const client = await getOpenAI();
 
-  const response = await getOpenAI().chat.completions.create({
+  const response = await client.chat.completions.create({
     model: 'gpt-4o',
     max_tokens: 4096,
     messages: [
@@ -159,17 +170,14 @@ export async function optimizeWithOpenAI(input: OptimizationInput): Promise<Opti
 
 function extractSuggestions(content: string, keywords: string[]): string[] {
   const suggestions: string[] = [];
-
   if (keywords.length > 0 && content.toLowerCase().includes(keywords[0].toLowerCase())) {
     suggestions.push(`Primary keyword "${keywords[0]}" successfully integrated`);
   }
-
   if (content.includes('<h1>')) suggestions.push('H1 heading present');
   if (content.includes('<h2>')) suggestions.push('H2 subheadings added for structure');
   if (content.includes('faq') || content.includes('FAQ')) suggestions.push('FAQ section added for featured snippet opportunities');
   if (content.includes('<ul>') || content.includes('<ol>')) suggestions.push('Lists added for improved readability');
   if (content.includes('<strong>')) suggestions.push('Key phrases bolded for emphasis');
-
   return suggestions;
 }
 
@@ -177,9 +185,7 @@ export async function optimizeContent(
   input: OptimizationInput,
   provider: AIProvider = 'claude'
 ): Promise<OptimizationResult> {
-  if (provider === 'openai') {
-    return optimizeWithOpenAI(input);
-  }
+  if (provider === 'openai') return optimizeWithOpenAI(input);
   return optimizeWithClaude(input);
 }
 
@@ -188,7 +194,8 @@ export async function generateMetaTags(
   primaryKeyword: string,
   pageTitle?: string
 ): Promise<{ title: string; description: string; ogTitle: string; ogDescription: string }> {
-  const response = await getAnthropic().messages.create({
+  const client = await getAnthropic();
+  const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 512,
     messages: [

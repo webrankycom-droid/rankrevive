@@ -186,4 +186,12 @@ export const adminApi = {
     apiClient.patch(`/admin/users/${id}`, data),
 
   getRevenue: () => apiClient.get('/admin/revenue'),
+
+  getSettings: () =>
+    apiClient.get<{
+      settings: Array<{ key: string; label: string; maskedValue: string; source: string; isSet: boolean }>;
+    }>('/admin/settings'),
+
+  updateSettings: (settings: Array<{ key: string; value: string }>) =>
+    apiClient.put<{ success: boolean }>('/admin/settings', { settings }),
 };

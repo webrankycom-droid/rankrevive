@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { query, queryOne } from '../db';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth';
+import { clearApiKeyCache } from '../services/aiService';
 
 const router = Router();
 
@@ -157,6 +158,69 @@ router.get('/revenue', async (_req: AuthRequest, res: Response): Promise<void> =
   }
 
   res.json({ subscriptions, mrr, arr: mrr * 12 });
+});
+
+// GET /api/admin/settings - Get all configuration settings (masked)
+router.get('/settings', async (_req: AuthRequest, res: Response): Promise<void> => {
+  const SETTING_KEYS = [
+    { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', sensitive: true },
+    { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', sensitive: true },
+    { key: 'STRIPE_SECRET_KEY', label: 'Stripe Secret Key', sensitive: true },
+    { key: 'STRIPE_WEBHOOK_SECRET', label: 'Stripe Webhook Secret', sensitive: true },
+    { key: 'STRIPE_STARTER_PRICE_ID', label: 'Stripe Starter Price ID', sensitive: false },
+    { key: 'STRIPE_PRO_PRICE_ID', label: 'Stripe Pro Price ID', sensitive: false },
+    { key: 'STRIPE_AGENCY_PRICE_ID', label: 'Stripe Agency Price ID', sensitive: false },
+  ];
+
+  const rows = await query<{ key: string; value: string; label: string }>(
+    'SELECT key, value, label FROM settings WHERE key = ANY($1)',
+    [SETTING_KEYS.map((s) => s.key)]
+  );
+
+  const dbMap = new Map(rows.map((r) => [r.key, r.value]));
+
+  const settings = SETTING_KEYS.map(({ key, label, sensitive }) => {
+    const envVal = process.env[key];
+    const dbVal = dbMap.get(key);
+    const value = envVal || dbVal || '';
+    const source = envVal ? 'env' : dbVal ? 'db' : 'unset';
+    const maskedValue = sensitive && value
+      ? value.slice(0, 7) + '••••••••' + value.slice(-4)
+      : value;
+    return { key, label, maskedValue, source, isSet: !!value };
+  });
+
+  res.json({ settings });
+});
+
+// PUT /api/admin/settings - Save configuration settings
+router.put('/settings', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { settings } = req.body as { settings: Array<{ key: string; value: string }> };
+
+  if (!Array.isArray(settings)) {
+    res.status(422).json({ error: 'settings must be an array' });
+    return;
+  }
+
+  const ALLOWED_KEYS = new Set([
+    'ANTHROPIC_API_KEY', 'OPENAI_API_KEY',
+    'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET',
+    'STRIPE_STARTER_PRICE_ID', 'STRIPE_PRO_PRICE_ID', 'STRIPE_AGENCY_PRICE_ID',
+  ]);
+
+  for (const { key, value } of settings) {
+    if (!ALLOWED_KEYS.has(key) || !value?.trim()) continue;
+    await query(
+      `INSERT INTO settings (key, value, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [key, value.trim()]
+    );
+  }
+
+  clearApiKeyCache();
+
+  res.json({ success: true });
 });
 
 export default router;
