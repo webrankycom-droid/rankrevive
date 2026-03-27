@@ -11,7 +11,7 @@ router.use(requireAdmin);
 
 // GET /api/admin/stats - Platform stats
 router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => {
-  const [userStats] = await query<{h
+  const [userStats] = await query<{
     total_users: string;
     starter_users: string;
     pro_users: string;
