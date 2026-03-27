@@ -33,9 +33,37 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
     const { accessToken, refreshToken } = await gscService.exchangeCodeForTokens(code);
 
     if (siteId && userId) {
+      // Auto-select GSC property by matching the site's domain
+      let gscProperty: string | null = null;
+      try {
+        const site = await queryOne<{ domain: string }>(
+          'SELECT domain FROM sites WHERE id = $1 AND user_id = $2',
+          [siteId, userId]
+        );
+        if (site?.domain) {
+          const properties = await gscService.listProperties(accessToken, refreshToken);
+          const domain = site.domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          // Try sc-domain: prefix first, then https/http URL variants
+          gscProperty =
+            properties.find((p) => p === `sc-domain:${domain}`) ||
+            properties.find((p) => p === `https://${domain}/`) ||
+            properties.find((p) => p === `https://${domain}`) ||
+            properties.find((p) => p === `http://${domain}/`) ||
+            properties.find((p) => p.includes(domain)) ||
+            properties[0] ||
+            null;
+        }
+      } catch (propErr) {
+        console.error('GSC property auto-select error (non-fatal):', propErr);
+      }
+
       await query(
-        'UPDATE sites SET gsc_access_token = $1, gsc_refresh_token = $2 WHERE id = $3 AND user_id = $4',
-        [accessToken, refreshToken, siteId, userId]
+        `UPDATE sites
+         SET gsc_access_token = $1,
+             gsc_refresh_token = $2,
+             gsc_property = COALESCE($3, gsc_property)
+         WHERE id = $4 AND user_id = $5`,
+        [accessToken, refreshToken, gscProperty, siteId, userId]
       );
     }
 
