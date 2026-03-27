@@ -76,7 +76,7 @@ export default function DashboardPage() {
     <div>
       <Header
         title="Dashboard"
-        subtitle={selectedSiteId && sites.find(s => s.id === selectedSiteId)?.domain}
+        subtitle={selectedSiteId ? sites.find(s => s.id === selectedSiteId)?.domain : undefined}
         action={
           selectedSiteId
             ? { label: 'Sync GSC', onClick: handleSync, loading: syncing }

@@ -35,7 +35,19 @@
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\cleanup.ps1\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\check.ps1\")",
       "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\final-push.ps1\")",
-      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\deploy-push.ps1\")"
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\deploy-push.ps1\")",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__list_organizations",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__get_cost",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__confirm_cost",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__create_project",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__get_project_url",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__apply_migration",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__execute_sql",
+      "mcp__cbafd9c3-f7c4-47d2-abe7-22e744438612__get_project",
+      "mcp__942b7f90-e79f-4343-9075-583b23c1e1fe__deploy_to_vercel",
+      "Bash(powershell -ExecutionPolicy Bypass -Command \"vercel --version\")",
+      "Bash(\"D:\\\\saass tool\\\\vercel-out.txt\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"D:\\\\saass tool\\\\vercel-setup.ps1\")"
     ]
   }
 }
