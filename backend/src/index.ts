@@ -57,6 +57,20 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), version: '1.0.0' });
 });
 
+// Temporary debug endpoint
+app.get('/debug-db', async (_req, res) => {
+  const url = process.env.DATABASE_URL || 'NOT SET';
+  const masked = url.replace(/:([^@]+)@/, ':***@');
+  try {
+    const { default: pool } = await import('./db');
+    const result = await pool.query('SELECT current_user, current_database()');
+    res.json({ dbUrl: masked, status: 'connected', result: result.rows[0] });
+  } catch (err: unknown) {
+    const error = err as Error;
+    res.json({ dbUrl: masked, status: 'failed', error: error.message });
+  }
+});
+
 // Stripe webhook (raw body required)
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const { stripeService } = await import('./services/stripeService');
