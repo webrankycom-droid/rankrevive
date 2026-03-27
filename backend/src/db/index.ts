@@ -1,101 +1,26 @@
-import { Pool, PoolClient } from 'pg';
+import { createClient } from '@supabase/supabase-js';
 import Redis from 'ioredis';
 
-// PostgreSQL Pool
-// In production, parse the URL and set SSL SNI explicitly for Supabase Supavisor
-function buildPoolConfig() {
-  const dbUrl = process.env.DATABASE_URL || '';
-  if (process.env.NODE_ENV === 'production' && dbUrl) {
-    const url = new URL(dbUrl);
-    return {
-      host: url.hostname,
-      port: parseInt(url.port || '5432'),
-      user: decodeURIComponent(url.username),
-      password: decodeURIComponent(url.password),
-      database: url.pathname.replace('/', ''),
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-      ssl: {
-        rejectUnauthorized: false,
-        servername: url.hostname, // explicit SNI for Supavisor tenant lookup
-      },
-    };
-  }
-  return {
-    connectionString: dbUrl || 'postgresql://localhost:5432/rankrevive',
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
-    ssl: false,
-  };
-}
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://neksmycluzwhmvsfowxy.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const pool = new Pool(buildPoolConfig());
-
-pool.on('error', (err) => {
-  console.error('Unexpected PostgreSQL pool error (non-fatal):', err.message);
-  // Do NOT exit — Supabase closes idle connections which triggers this event
+// Supabase client — uses HTTPS (PostgREST) instead of direct TCP PostgreSQL
+// This avoids Railway's IPv6 limitation with Supabase direct connections
+export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false },
 });
 
-// Redis client
-export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: 3,
-  lazyConnect: true,
-  retryStrategy(times) {
-    if (times > 3) return null;
-    return Math.min(times * 100, 3000);
-  },
-});
-
-redis.on('error', (err) => {
-  console.error('Redis connection error:', err);
-});
-
-redis.on('connect', () => {
-  console.log('Redis connected');
-});
-
-// Convert snake_case object keys to camelCase
-export function camelizeKeys<T = Record<string, unknown>>(obj: Record<string, unknown>): T {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    const camelKey = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-    result[camelKey] = value;
-  }
-  return result as T;
-}
-
-// Query helper
+// Generic query helper using Supabase RPC for raw SQL
 export async function query<T = Record<string, unknown>>(
   text: string,
   params?: unknown[]
 ): Promise<T[]> {
-  const start = Date.now();
-  const res = await pool.query(text, params);
-  const duration = Date.now() - start;
-  if (duration > 1000) {
-    console.warn('Slow query detected:', { text, duration });
-  }
-  return res.rows as T[];
-}
-
-// Transaction helper
-export async function withTransaction<T>(
-  callback: (client: PoolClient) => Promise<T>
-): Promise<T> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
-    return result;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
+  const { data, error } = await supabase.rpc('exec_sql', {
+    query_text: text,
+    query_params: params || [],
+  });
+  if (error) throw new Error(error.message);
+  return (data as T[]) || [];
 }
 
 // Single row helper
@@ -107,34 +32,57 @@ export async function queryOne<T = Record<string, unknown>>(
   return rows[0] ?? null;
 }
 
-// Cache helper with Redis
+// Transaction helper (basic — runs queries sequentially)
+export async function withTransaction<T>(
+  callback: (client: typeof supabase) => Promise<T>
+): Promise<T> {
+  return callback(supabase);
+}
+
+// Convert snake_case keys to camelCase
+export function camelizeKeys<T = Record<string, unknown>>(obj: Record<string, unknown>): T {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const camelKey = key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+    result[camelKey] = value;
+  }
+  return result as T;
+}
+
+// Redis client (optional — gracefully degrades if not available)
+export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+  maxRetriesPerRequest: 1,
+  lazyConnect: true,
+  retryStrategy(times) {
+    if (times > 2) return null;
+    return Math.min(times * 100, 1000);
+  },
+});
+
+redis.on('error', () => {
+  // Redis is optional — silently ignore connection errors
+});
+
 export async function cacheGet<T>(key: string): Promise<T | null> {
   try {
     const value = await redis.get(key);
     if (!value) return null;
     return JSON.parse(value) as T;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export async function cacheSet(key: string, value: unknown, ttlSeconds = 300): Promise<void> {
   try {
     await redis.setex(key, ttlSeconds, JSON.stringify(value));
-  } catch (err) {
-    console.error('Cache set error:', err);
-  }
+  } catch { /* Redis optional */ }
 }
 
 export async function cacheDel(pattern: string): Promise<void> {
   try {
     const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-    }
-  } catch (err) {
-    console.error('Cache delete error:', err);
-  }
+    if (keys.length > 0) await redis.del(...keys);
+  } catch { /* Redis optional */ }
 }
 
-export default pool;
+// Keep pg pool as fallback export for compatibility
+export default supabase;

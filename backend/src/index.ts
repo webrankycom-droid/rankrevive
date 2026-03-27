@@ -59,15 +59,17 @@ app.get('/health', (_req, res) => {
 
 // Temporary debug endpoint
 app.get('/debug-db', async (_req, res) => {
-  const url = process.env.DATABASE_URL || 'NOT SET';
-  const masked = url.replace(/:([^@]+)@/, ':***@');
   try {
-    const { default: pool } = await import('./db');
-    const result = await pool.query('SELECT current_user, current_database()');
-    res.json({ dbUrl: masked, status: 'connected', result: result.rows[0] });
+    const { supabase } = await import('./db');
+    const { data, error } = await supabase.from('users').select('count').limit(1);
+    if (error) {
+      res.json({ status: 'failed', error: error.message, hint: error.hint });
+    } else {
+      res.json({ status: 'connected', supabaseUrl: process.env.SUPABASE_URL || 'https://neksmycluzwhmvsfowxy.supabase.co', data });
+    }
   } catch (err: unknown) {
     const error = err as Error;
-    res.json({ dbUrl: masked, status: 'failed', error: error.message });
+    res.json({ status: 'error', error: error.message });
   }
 });
 
