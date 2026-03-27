@@ -96,6 +96,9 @@ export const gscApi = {
   listProperties: (siteId: string) =>
     apiClient.get<{ properties: string[] }>('/gsc/properties', { params: { siteId } }),
 
+  disconnect: (siteId: string) =>
+    apiClient.delete<{ success: boolean }>(`/gsc/disconnect/${siteId}`),
+
   syncSite: (siteId: string) =>
     apiClient.post<{ success: boolean; synced: number; errors: number }>(`/gsc/sync/${siteId}`),
 

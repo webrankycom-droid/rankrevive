@@ -74,6 +74,21 @@ router.get('/callback', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+// DELETE /api/gsc/disconnect/:siteId - Clear GSC tokens (disconnect)
+router.delete('/disconnect/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { siteId } = req.params;
+  try {
+    await query(
+      'UPDATE sites SET gsc_access_token = NULL, gsc_refresh_token = NULL, gsc_property = NULL WHERE id = $1 AND user_id = $2',
+      [siteId, req.user!.userId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('GSC disconnect error:', err);
+    res.status(500).json({ error: 'Failed to disconnect GSC' });
+  }
+});
+
 // GET /api/gsc/properties - List GSC properties
 router.get('/properties', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const { siteId } = req.query as { siteId: string };
