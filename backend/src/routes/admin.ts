@@ -11,7 +11,7 @@ router.use(requireAdmin);
 
 // GET /api/admin/stats - Platform stats
 router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => {
-  const [userStats] = await query<{
+  const [userStats] = await query<{h
     total_users: string;
     starter_users: string;
     pro_users: string;
@@ -137,7 +137,7 @@ router.patch('/users/:id', async (req: AuthRequest, res: Response): Promise<void
 
 // POST /api/admin/reset-monthly-usage - Reset monthly page counts
 router.post('/reset-monthly-usage', async (_req: AuthRequest, res: Response): Promise<void> => {
-  await query('UPDATE users SET pages_used_this_month = 0');
+  await query('UPDATE users SET pages_used_this_month = 0 WHERE id IS NOT NULL');
   res.json({ success: true, message: 'Monthly usage reset for all users' });
 });
 
@@ -173,8 +173,7 @@ router.get('/settings', async (_req: AuthRequest, res: Response): Promise<void> 
   ];
 
   const rows = await query<{ key: string; value: string; label: string }>(
-    'SELECT key, value, label FROM settings WHERE key = ANY($1)',
-    [SETTING_KEYS.map((s) => s.key)]
+    'SELECT key, value, label FROM settings '
   );
 
   const dbMap = new Map(rows.map((r) => [r.key, r.value]));
