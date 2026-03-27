@@ -2,13 +2,36 @@ import { Pool, PoolClient } from 'pg';
 import Redis from 'ioredis';
 
 // PostgreSQL Pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
+// In production, parse the URL and set SSL SNI explicitly for Supabase Supavisor
+function buildPoolConfig() {
+  const dbUrl = process.env.DATABASE_URL || '';
+  if (process.env.NODE_ENV === 'production' && dbUrl) {
+    const url = new URL(dbUrl);
+    return {
+      host: url.hostname,
+      port: parseInt(url.port || '5432'),
+      user: decodeURIComponent(url.username),
+      password: decodeURIComponent(url.password),
+      database: url.pathname.replace('/', ''),
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      ssl: {
+        rejectUnauthorized: false,
+        servername: url.hostname, // explicit SNI for Supavisor tenant lookup
+      },
+    };
+  }
+  return {
+    connectionString: dbUrl || 'postgresql://localhost:5432/rankrevive',
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+    ssl: false,
+  };
+}
+
+const pool = new Pool(buildPoolConfig());
 
 pool.on('error', (err) => {
   console.error('Unexpected PostgreSQL pool error (non-fatal):', err.message);
