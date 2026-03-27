@@ -2,10 +2,12 @@ import { google, searchconsole_v1 } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import { query, queryOne, cacheGet, cacheSet } from '../db';
 
+const BACKEND_URL = process.env.BACKEND_URL || 'https://rankrevive-production.up.railway.app';
+
 const oauth2Client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  `${process.env.FRONTEND_URL}/api/auth/callback/google-gsc`
+  `${BACKEND_URL}/api/gsc/callback`
 );
 
 export interface GSCPage {
@@ -28,7 +30,7 @@ export interface GSCPageWithKeywords extends GSCPage {
   keywords: GSCKeyword[];
 }
 
-export function getAuthUrl(userId: string): string {
+export function getAuthUrl(userId: string, siteId: string): string {
   const scopes = [
     'https://www.googleapis.com/auth/webmasters.readonly',
     'https://www.googleapis.com/auth/userinfo.email',
@@ -37,7 +39,7 @@ export function getAuthUrl(userId: string): string {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    state: userId,
+    state: JSON.stringify({ userId, siteId }),
     prompt: 'consent',
   });
 }
@@ -59,7 +61,7 @@ function getOAuthClientForSite(accessToken: string, refreshToken: string): OAuth
   const client = new OAuth2Client(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `${process.env.FRONTEND_URL}/api/auth/callback/google-gsc`
+    `${BACKEND_URL}/api/gsc/callback`
   );
   client.setCredentials({
     access_token: accessToken,

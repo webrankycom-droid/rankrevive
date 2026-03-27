@@ -91,7 +91,7 @@ export const pagesApi = {
 // ─── GSC ─────────────────────────────────────────────────────────────────────
 
 export const gscApi = {
-  getAuthUrl: () => apiClient.get<{ url: string }>('/gsc/auth-url'),
+  getAuthUrl: (siteId: string) => apiClient.get<{ url: string }>('/gsc/auth-url', { params: { siteId } }),
 
   listProperties: (siteId: string) =>
     apiClient.get<{ properties: string[] }>('/gsc/properties', { params: { siteId } }),

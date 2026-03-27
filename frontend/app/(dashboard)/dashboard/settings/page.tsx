@@ -75,7 +75,7 @@ export default function SettingsPage() {
   }
 
   async function handleConnectGSC(siteId: string) {
-    const { data } = await gscApi.getAuthUrl();
+    const { data } = await gscApi.getAuthUrl(siteId);
     if (data.url) window.location.href = data.url;
   }
 

@@ -1,39 +1,48 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { gscService } from '../services/gscService';
 import { query, queryOne } from '../db';
 
 const router = Router();
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://frontend-omega-tan-81.vercel.app';
+
 // GET /api/gsc/auth-url - Get Google OAuth URL
 router.get('/auth-url', authenticate, (req: AuthRequest, res: Response): void => {
-  const url = gscService.getAuthUrl(req.user!.userId);
+  const { siteId } = req.query as { siteId: string };
+  if (!siteId) {
+    res.status(400).json({ error: 'siteId is required' });
+    return;
+  }
+  const url = gscService.getAuthUrl(req.user!.userId, siteId);
   res.json({ url });
 });
 
-// GET /api/gsc/callback - OAuth callback
-router.get('/callback', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { code, state, siteId } = req.query as { code: string; state: string; siteId: string };
+// GET /api/gsc/callback - OAuth callback (no auth middleware — Google redirects here directly)
+router.get('/callback', async (req: Request, res: Response): Promise<void> => {
+  const { code, state, error } = req.query as { code: string; state: string; error?: string };
 
-  if (state !== req.user!.userId) {
-    res.status(400).json({ error: 'State mismatch' });
+  if (error) {
+    console.error('GSC OAuth error from Google:', error);
+    res.redirect(`${FRONTEND_URL}/dashboard/settings?section=gsc&gsc=error`);
     return;
   }
 
   try {
+    const { userId, siteId } = JSON.parse(state);
     const { accessToken, refreshToken } = await gscService.exchangeCodeForTokens(code);
 
-    if (siteId) {
+    if (siteId && userId) {
       await query(
         'UPDATE sites SET gsc_access_token = $1, gsc_refresh_token = $2 WHERE id = $3 AND user_id = $4',
-        [accessToken, refreshToken, siteId, req.user!.userId]
+        [accessToken, refreshToken, siteId, userId]
       );
     }
 
-    res.json({ success: true, accessToken, refreshToken });
+    res.redirect(`${FRONTEND_URL}/dashboard/settings?section=gsc&gsc=success`);
   } catch (err) {
     console.error('GSC OAuth callback error:', err);
-    res.status(500).json({ error: 'Failed to exchange code for tokens' });
+    res.redirect(`${FRONTEND_URL}/dashboard/settings?section=gsc&gsc=error`);
   }
 });
 
