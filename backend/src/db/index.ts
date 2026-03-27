@@ -14,18 +14,26 @@ export async function query<T = Record<string, unknown>>(
   text: string,
   params?: unknown[]
 ): Promise<T[]> {
-  // Convert all params to strings (null stays null for SQL NULL handling)
   const stringParams: (string | null)[] = (params || []).map(p =>
     p === null || p === undefined ? null : String(p)
   );
 
-  const { data, error } = await supabase.rpc('exec_sql', {
-    query_text: text,
-    query_params: stringParams,
-  });
+  try {
+    const { data, error } = await supabase.rpc('exec_sql', {
+      query_text: text,
+      query_params: stringParams,
+    });
 
-  if (error) throw new Error(`DB Error: ${error.message}`);
-  return (data as T[]) || [];
+    if (error) {
+      console.error('[DB Error]', error.message, '| Query:', text.slice(0, 100));
+      throw new Error(error.message);
+    }
+    return (data as T[]) || [];
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[DB Error]', msg);
+    throw new Error(msg);
+  }
 }
 
 // Single row helper
