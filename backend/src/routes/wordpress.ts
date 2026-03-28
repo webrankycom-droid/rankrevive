@@ -41,7 +41,20 @@ router.post('/connect', authenticate, async (req: AuthRequest, res: Response): P
   res.json({ success: true, siteTitle: test.siteTitle });
 });
 
-// GET /api/wordpress/test/:siteId - Test WordPress connection
+// POST /api/wordpress/test-direct - Test connection with credentials from body (before saving)
+router.post('/test-direct', authenticate, async (_req: AuthRequest, res: Response): Promise<void> => {
+  const { wpUrl, wpUsername, wpAppPassword } = _req.body;
+
+  if (!wpUrl || !wpUsername || !wpAppPassword) {
+    res.status(422).json({ error: 'wpUrl, wpUsername, and wpAppPassword are required' });
+    return;
+  }
+
+  const result = await wordpressService.testConnection(wpUrl, wpUsername, wpAppPassword);
+  res.json(result);
+});
+
+// GET /api/wordpress/test/:siteId - Test WordPress connection (uses saved DB credentials)
 router.get('/test/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const { siteId } = req.params;
 

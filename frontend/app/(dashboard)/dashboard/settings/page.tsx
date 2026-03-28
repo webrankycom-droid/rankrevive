@@ -80,37 +80,47 @@ export default function SettingsPage() {
   }
 
   async function handleTestWP() {
-    if (!wpForm.siteId || !wpForm.wpUrl) {
-      toast.error('Fill in all WordPress fields');
+    if (!wpForm.wpUrl || !wpForm.wpUsername || !wpForm.wpAppPassword) {
+      toast.error('Fill in the WordPress URL, username, and Application Password');
       return;
     }
     setTestingWP(true);
     try {
-      const res = await wordpressApi.test(wpForm.siteId);
+      const res = await wordpressApi.testDirect(
+        wpForm.wpUrl,
+        wpForm.wpUsername,
+        wpForm.wpAppPassword
+      );
       if (res.data.success) {
         toast.success(`Connected to "${res.data.siteTitle}"!`);
       } else {
-        toast.error(res.data.error || 'Connection failed');
+        toast.error(res.data.error || 'Connection failed', { duration: 8000 });
       }
     } catch {
-      toast.error('Failed to test connection');
+      toast.error('Failed to test connection — check the URL and try again');
     } finally {
       setTestingWP(false);
     }
   }
 
   async function handleSaveWP() {
+    if (!wpForm.siteId || !wpForm.wpUrl || !wpForm.wpUsername || !wpForm.wpAppPassword) {
+      toast.error('Please fill in all WordPress fields and select a site');
+      return;
+    }
     try {
-      await wordpressApi.connect(
+      const res = await wordpressApi.connect(
         wpForm.siteId,
         wpForm.wpUrl,
         wpForm.wpUsername,
         wpForm.wpAppPassword
       );
-      toast.success('WordPress connected successfully!');
+      toast.success(`WordPress connected to "${res.data?.siteTitle || 'your site'}"!`);
       queryClient.invalidateQueries({ queryKey: ['sites'] });
-    } catch {
-      toast.error('Failed to save WordPress settings');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      const msg = axiosErr?.response?.data?.error || 'Failed to save WordPress settings';
+      toast.error(msg, { duration: 8000 });
     }
   }
 
@@ -304,9 +314,17 @@ export default function SettingsPage() {
                 <CardTitle>WordPress Integration</CardTitle>
                 <Badge variant="default">REST API</Badge>
               </CardHeader>
-              <p className="text-sm text-dark-400 mb-5">
+              <p className="text-sm text-dark-400 mb-3">
                 Connect WordPress to fetch content and publish optimizations directly. Uses Application Passwords (WP 5.6+).
               </p>
+              <div className="rounded-lg bg-brand-500/10 border border-brand-500/20 px-4 py-3 mb-5">
+                <p className="text-xs text-brand-300 font-medium mb-1">⚠️ Use an Application Password — not your login password</p>
+                <p className="text-xs text-dark-400">
+                  Go to <strong className="text-dark-300">WP Admin → Users → Your Profile</strong>, scroll to{' '}
+                  <strong className="text-dark-300">Application Passwords</strong>, type a name (e.g. "RankRevive"), and click{' '}
+                  <strong className="text-dark-300">Add New Application Password</strong>. Copy the generated password (format: xxxx xxxx xxxx xxxx xxxx xxxx).
+                </p>
+              </div>
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-medium text-dark-300 mb-1.5 block">Select Site</label>

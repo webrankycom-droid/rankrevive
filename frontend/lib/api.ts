@@ -148,6 +148,12 @@ export const wordpressApi = {
   connect: (siteId: string, wpUrl: string, wpUsername: string, wpAppPassword: string) =>
     apiClient.post('/wordpress/connect', { siteId, wpUrl, wpUsername, wpAppPassword }),
 
+  testDirect: (wpUrl: string, wpUsername: string, wpAppPassword: string) =>
+    apiClient.post<{ success: boolean; siteTitle?: string; error?: string }>(
+      '/wordpress/test-direct',
+      { wpUrl, wpUsername, wpAppPassword }
+    ),
+
   test: (siteId: string) =>
     apiClient.get<{ success: boolean; siteTitle?: string; error?: string }>(
       `/wordpress/test/${siteId}`

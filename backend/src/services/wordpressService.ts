@@ -47,21 +47,61 @@ export async function testConnection(
   username: string,
   appPassword: string
 ): Promise<{ success: boolean; siteTitle?: string; error?: string }> {
+  // Strip spaces from app password — WordPress accepts both forms
+  const cleanPassword = appPassword.replace(/\s+/g, '');
+
   try {
-    const client = createWPClient(wpUrl, username, appPassword);
-    const response = await client.get('/users/me');
-    const siteRes = await axios.get(`${wpUrl}/wp-json`);
+    const client = createWPClient(wpUrl, username, cleanPassword);
+    await client.get('/users/me');
+    const siteRes = await axios.get(`${wpUrl}/wp-json`, { timeout: 15000 });
     return {
       success: true,
       siteTitle: siteRes.data?.name || 'WordPress Site',
     };
   } catch (err: unknown) {
-    const error = err as { response?: { status?: number } };
+    const error = err as {
+      response?: { status?: number };
+      code?: string;
+      message?: string;
+    };
+    const status = error?.response?.status;
+
+    if (status === 401) {
+      return {
+        success: false,
+        error:
+          'Invalid credentials (401). Make sure you are using an Application Password, not your login password. Generate one at: WP Admin → Users → Profile → Application Passwords.',
+      };
+    }
+    if (status === 403) {
+      return {
+        success: false,
+        error:
+          'Access denied (403). Application Passwords may be disabled or blocked by a security plugin (e.g. Wordfence). Check your WordPress security settings.',
+      };
+    }
+    if (status === 404) {
+      return {
+        success: false,
+        error:
+          'WordPress REST API not found (404). Verify the site URL is correct and the REST API is enabled.',
+      };
+    }
+    if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND') {
+      return {
+        success: false,
+        error: `Cannot reach the site: ${error.message}. Verify the WordPress URL is correct and the site is online.`,
+      };
+    }
+    if (error?.code === 'ECONNABORTED') {
+      return {
+        success: false,
+        error: 'Connection timed out. The site took too long to respond.',
+      };
+    }
     return {
       success: false,
-      error: error?.response?.status === 401
-        ? 'Invalid credentials. Check your username and app password.'
-        : 'Could not connect to WordPress. Verify the URL and credentials.',
+      error: `Could not connect to WordPress${status ? ` (HTTP ${status})` : ''}. Verify the URL and credentials.`,
     };
   }
 }
