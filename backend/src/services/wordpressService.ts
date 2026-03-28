@@ -120,6 +120,7 @@ export async function getPostByUrl(
 
   // Extract slug from URL
   const slug = new URL(pageUrl).pathname.split('/').filter(Boolean).pop() || '';
+  console.log('[getPostByUrl] baseURL:', baseURL, 'slug:', slug, 'pageUrl:', pageUrl);
 
   // Try posts first (public endpoint — no auth needed)
   try {
@@ -127,8 +128,11 @@ export async function getPostByUrl(
       params: { slug, _embed: false },
       timeout: 30000,
     });
+    console.log('[getPostByUrl] posts response:', postsRes.status, 'count:', postsRes.data?.length);
     if (postsRes.data?.length > 0) return postsRes.data[0];
-  } catch { /* continue */ }
+  } catch (err: unknown) {
+    console.error('[getPostByUrl] posts error:', (err as Error).message);
+  }
 
   // Try pages (public endpoint — no auth needed)
   try {
@@ -136,9 +140,13 @@ export async function getPostByUrl(
       params: { slug, _embed: false },
       timeout: 30000,
     });
+    console.log('[getPostByUrl] pages response:', pagesRes.status, 'count:', pagesRes.data?.length);
     if (pagesRes.data?.length > 0) return pagesRes.data[0];
-  } catch { /* continue */ }
+  } catch (err: unknown) {
+    console.error('[getPostByUrl] pages error:', (err as Error).message);
+  }
 
+  console.error('[getPostByUrl] no post found for slug:', slug);
   return null;
 }
 
