@@ -106,7 +106,7 @@ export default function HistoryPage() {
                           <td className="px-4 py-3.5 text-right">
                             {opt.pageId && (
                               <Link
-                                href={`/dashboard/optimizer/${opt.pageId}`}
+                                href={`/optimizer/${opt.pageId}`}
                                 className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-all"
                               >
                                 Open <ExternalLink className="w-3 h-3" />
