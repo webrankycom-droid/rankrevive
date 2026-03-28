@@ -30,7 +30,9 @@ export interface WPPage {
 
 function createWPClient(wpUrl: string, username: string, appPassword: string): AxiosInstance {
   const baseURL = wpUrl.endsWith('/') ? `${wpUrl}wp-json/wp/v2` : `${wpUrl}/wp-json/wp/v2`;
-  const token = Buffer.from(`${username}:${appPassword}`).toString('base64');
+  // WordPress Application Passwords are displayed with spaces but must be sent without them
+    const cleanPassword = appPassword.replace(/\s+/g, '');
+  const token = Buffer.from(`${username}:${cleanPassword`).toString('base64');
 
   return axios.create({
     baseURL,
