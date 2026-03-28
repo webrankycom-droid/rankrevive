@@ -42,6 +42,48 @@ function SkeletonRow() {
   );
 }
 
+import Link from 'next/link';
+import { ExternalLink, Sparkles, RefreshCw, MoreHorizontal } from 'lucide-react';
+import { cn, formatNumber, formatRelativeDate, truncateUrl, getScoreColor, getScoreBg } from '@/lib/utils';
+import { PositionBadge, StatusBadge } from '@/components/ui/Badge';
+import type { Page } from '@/types';
+
+interface PageTableProps {
+  pages: Page[];
+  loading?: boolean;
+  onOptimize?: (pageId: string) => void;
+  onSync?: (pageId: string) => void;
+}
+
+function ScoreBar({ score }: { score: number | null | undefined }) {
+  if (score == null) return <span className="text-dark-500 text-xs">—</span>;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-16 h-1.5 bg-dark-700 rounded-full overflow-hidden">
+        <div
+          className={cn('h-full rounded-full transition-all', getScoreBg(score))}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+      <span className={cn('text-xs font-semibold tabular-nums', getScoreColor(score))}>
+        {score}
+      </span>
+    </div>
+  );
+}
+
+function SkeletonRow() {
+  return (
+    <tr className="border-b border-dark-700/50">
+      {[...Array(7)].map((_, i) => (
+        <td key={i} className="px-4 py-3.5">
+          <div className="h-4 bg-dark-700 rounded animate-pulse" style={{ width: `${60 + i * 10}%` }} />
+        </td>
+      ))}
+    </tr>
+  );
+}
+
 export default function PageTable({ pages, loading, onOptimize, onSync }: PageTableProps) {
   return (
     <div className="overflow-x-auto">
@@ -83,7 +125,7 @@ export default function PageTable({ pages, loading, onOptimize, onSync }: PageTa
                     <div className="flex items-start gap-2">
                       <div className="min-w-0">
                         <Link
-                          href={`/dashboard/optimizer/${page.id}`}
+                          href={`/optimizer/${page.id}`}
                           className="text-dark-100 hover:text-brand-300 font-medium transition-colors text-xs leading-relaxed block truncate"
                         >
                           {truncateUrl(page.url, 55)}
@@ -136,7 +178,7 @@ export default function PageTable({ pages, loading, onOptimize, onSync }: PageTa
                   <td className="px-4 py-3.5">
                     <div className="flex items-center justify-end gap-1">
                       <Link
-                        href={`/dashboard/optimizer/${page.id}`}
+                        href={`/optimizer/${page.id}`}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 border border-brand-500/20 transition-colors"
                       >
                         <Sparkles className="w-3 h-3" />
