@@ -115,25 +115,32 @@ export async function getPostByUrl(
   pageUrl: string
 ): Promise<WPPost | null> {
   const client = createWPClient(wpUrl, username, appPassword);
+  // Use unauthenticated requests for public slug lookup
+  // Avoids 403 from security plugins (e.g. Wordfence) blocking auth REST endpoints
+  const baseURL = wpUrl.endsWith('/') ? wpUrl + 'wp-json/wp/v2' : wpUrl + '/wp-json/wp/v2';
 
   // Extract slug from URL
-  const urlPath = new URL(pageUrl).pathname;
-  const slug = urlPath.replace(/^\/|\/$/g, '').split('/').pop() || '';
+  const slug = new URL(pageUrl).pathname.split('/').filter(Boolean).pop() || '';
 
-  // Try posts first
+  // Try posts first (public endpoint, no auth needed)
   try {
-    const postsRes = await client.get('/posts', { params: { slug, _embed: false } });
+    const postsRes = await axios.get(baseURL + '/posts', {
+      params: { slug, _embed: false },
+      timeout: 30000,
+    });
     if (postsRes.data?.length > 0) return postsRes.data[0];
   } catch { /* continue */ }
 
-  // Try pages
+  // Try pages (public endpoint, no auth needed)
   try {
-    const pagesRes = await client.get('/pages', { params: { slug, _embed: false } });
+    const pagesRes = await axios.get(baseURL + '/pages', {
+      params: { slug, _embed: false },
+      timeout: 30000,
+    });
     if (pagesRes.data?.length > 0) return pagesRes.data[0];
   } catch { /* continue */ }
 
   return null;
-}
 
 export async function fetchPostContent(
   wpUrl: string,
