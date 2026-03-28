@@ -31,7 +31,7 @@ export interface WPPage {
 function createWPClient(wpUrl: string, username: string, appPassword: string): AxiosInstance {
   const baseURL = wpUrl.endsWith('/') ? `${wpUrl}wp-json/wp/v2` : `${wpUrl}/wp-json/wp/v2`;
   // WordPress Application Passwords are displayed with spaces but must be sent without them
-    const cleanPassword = appPassword.replace(/\s+/g, '');
+  const cleanPassword = appPassword.replace(/\s+/g, '');
   const token = Buffer.from(`${username}:${cleanPassword}`).toString('base64');
 
   return axios.create({
@@ -114,26 +114,25 @@ export async function getPostByUrl(
   appPassword: string,
   pageUrl: string
 ): Promise<WPPost | null> {
-  const client = createWPClient(wpUrl, username, appPassword);
-  // Use unauthenticated requests for public slug lookup
-  // Avoids 403 from security plugins (e.g. Wordfence) blocking auth REST endpoints
-  const baseURL = wpUrl.endsWith('/') ? wpUrl + 'wp-json/wp/v2' : wpUrl + '/wp-json/wp/v2';
+  // Use unauthenticated requests for public slug lookup — avoids 403 from
+  // security plugins (e.g. Wordfence) that block authenticated REST endpoints
+  const baseURL = wpUrl.endsWith('/') ? `${wpUrl}wp-json/wp/v2` : `${wpUrl}/wp-json/wp/v2`;
 
   // Extract slug from URL
   const slug = new URL(pageUrl).pathname.split('/').filter(Boolean).pop() || '';
 
-  // Try posts first (public endpoint, no auth needed)
+  // Try posts first (public endpoint — no auth needed)
   try {
-    const postsRes = await axios.get(baseURL + '/posts', {
+    const postsRes = await axios.get(`${baseURL}/posts`, {
       params: { slug, _embed: false },
       timeout: 30000,
     });
     if (postsRes.data?.length > 0) return postsRes.data[0];
   } catch { /* continue */ }
 
-  // Try pages (public endpoint, no auth needed)
+  // Try pages (public endpoint — no auth needed)
   try {
-    const pagesRes = await axios.get(baseURL + '/pages', {
+    const pagesRes = await axios.get(`${baseURL}/pages`, {
       params: { slug, _embed: false },
       timeout: 30000,
     });
@@ -141,6 +140,7 @@ export async function getPostByUrl(
   } catch { /* continue */ }
 
   return null;
+}
 
 export async function fetchPostContent(
   wpUrl: string,

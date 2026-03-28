@@ -43,10 +43,16 @@ router.post(
     const kwList = keywords.map((k) => k.keyword);
     const originalScore = contentScorer.scoreContent(page.current_content, kwList);
 
+    // Run AI optimization
     let result;
     try {
       result = await optimizeContent(
-        { content: page.current_content, keywords: kwList, pageUrl: page.url, pageTitle: page.title },
+        {
+          content: page.current_content,
+          keywords: kwList,
+          pageUrl: page.url,
+          pageTitle: page.title,
+        },
         provider
       );
     } catch (aiErr: unknown) {
