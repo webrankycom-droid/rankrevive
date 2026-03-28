@@ -112,8 +112,9 @@ router.get('/posts/:siteId', authenticate, async (req: AuthRequest, res: Respons
 });
 
 // POST /api/wordpress/fetch-content - Fetch content from WP for a page
+// Accepts optional pre-fetched content (client-side bypass when server IP is blocked by Wordfence)
 router.post('/fetch-content', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { pageId } = req.body;
+  const { pageId, content: prefetchedContent, title: prefetchedTitle, wpPostId: prefetchedWpPostId } = req.body;
 
   const page = await queryOne<{ url: string; site_id: string }>(
     `SELECT p.url, p.site_id FROM pages p
@@ -124,6 +125,21 @@ router.post('/fetch-content', authenticate, async (req: AuthRequest, res: Respon
 
   if (!page) {
     res.status(404).json({ error: 'Page not found' });
+    return;
+  }
+
+  // If content was pre-fetched client-side, save it directly (avoids server IP blocking)
+  if (prefetchedContent !== undefined) {
+    try {
+      await query(
+        'UPDATE pages SET current_content = $1, title = $2, last_synced_at = NOW() WHERE id = $3',
+        [prefetchedContent, prefetchedTitle || null, pageId]
+      );
+      res.json({ success: true, content: prefetchedContent, title: prefetchedTitle, wpPostId: prefetchedWpPostId });
+    } catch (err) {
+      console.error('Save pre-fetched WP content error:', err);
+      res.status(500).json({ error: 'Failed to save content' });
+    }
     return;
   }
 

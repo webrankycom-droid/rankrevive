@@ -47,9 +47,50 @@ export default function OptimizerPage() {
   });
 
   // Fetch content from WordPress
+  // Tries client-side first (browser → WP, bypasses server IP blocks by Wordfence),
+  // then falls back to server-side fetch.
   const fetchContentMutation = useMutation({
-    mutationFn: () => wordpressApi.fetchContent(id),
-    onSuccess: (res) => {
+    mutationFn: async () => {
+      // Client-side WP fetch: browser requests are not blocked by Wordfence IP rules
+      if (page?.wpUrl && page?.url) {
+        try {
+          const slug = new URL(page.url).pathname.split('/').filter(Boolean).pop() || '';
+          const baseURL = page.wpUrl.replace(/\/$/, '') + '/wp-json/wp/v2';
+
+          let wpPost: { id: number; title: { rendered: string }; content: { rendered: string } } | null = null;
+
+          // Try posts endpoint
+          const postsRes = await fetch(`${baseURL}/posts?slug=${encodeURIComponent(slug)}&_embed=false`);
+          if (postsRes.ok) {
+            const posts = await postsRes.json();
+            if (Array.isArray(posts) && posts.length > 0) wpPost = posts[0];
+          }
+
+          // Try pages endpoint if post not found
+          if (!wpPost) {
+            const pagesRes = await fetch(`${baseURL}/pages?slug=${encodeURIComponent(slug)}&_embed=false`);
+            if (pagesRes.ok) {
+              const pages = await pagesRes.json();
+              if (Array.isArray(pages) && pages.length > 0) wpPost = pages[0];
+            }
+          }
+
+          if (wpPost) {
+            // Send pre-fetched content to backend to store
+            return wordpressApi.fetchContent(id, {
+              content: wpPost.content.rendered,
+              title: wpPost.title.rendered,
+              wpPostId: wpPost.id,
+            });
+          }
+        } catch {
+          // Client-side fetch failed, fall through to server-side
+        }
+      }
+      // Server-side fallback
+      return wordpressApi.fetchContent(id);
+    },
+    onSuccess: () => {
       toast.success('Content fetched from WordPress');
       queryClient.invalidateQueries({ queryKey: ['page', id] });
     },

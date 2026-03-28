@@ -162,10 +162,13 @@ export const wordpressApi = {
   listPosts: (siteId: string, limit = 20) =>
     apiClient.get(`/wordpress/posts/${siteId}`, { params: { limit } }),
 
-  fetchContent: (pageId: string) =>
+  fetchContent: (
+    pageId: string,
+    prefetched?: { content: string; title: string; wpPostId: number }
+  ) =>
     apiClient.post<{ success: boolean; content: string; title: string; wpPostId: number }>(
       '/wordpress/fetch-content',
-      { pageId }
+      { pageId, ...prefetched }
     ),
 };
 
