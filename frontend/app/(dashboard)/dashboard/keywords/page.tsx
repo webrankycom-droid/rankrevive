@@ -103,7 +103,7 @@ export default function KeywordsPage() {
                           </td>
                           <td className="px-4 py-3 text-right">
                             <Link
-                              href={`/dashboard/optimizer/${p.id}`}
+                              href={`/optimizer/${p.id}`}
                               className="text-xs text-brand-400 hover:text-brand-300 font-medium"
                             >
                               Optimize →
