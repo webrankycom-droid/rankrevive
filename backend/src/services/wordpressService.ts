@@ -122,10 +122,18 @@ export async function getPostByUrl(
   const slug = new URL(pageUrl).pathname.split('/').filter(Boolean).pop() || '';
   console.log('[getPostByUrl] baseURL:', baseURL, 'slug:', slug, 'pageUrl:', pageUrl);
 
+  // Use a browser-like User-Agent to avoid being blocked by Wordfence's bot detection
+  // (Wordfence blocks requests from data-center IPs with non-browser User-Agents)
+  const browserHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+  };
+
   // Try posts first (public endpoint — no auth needed)
   try {
     const postsRes = await axios.get(`${baseURL}/posts`, {
       params: { slug, _embed: false },
+      headers: browserHeaders,
       timeout: 30000,
     });
     console.log('[getPostByUrl] posts response:', postsRes.status, 'count:', postsRes.data?.length);
@@ -138,6 +146,7 @@ export async function getPostByUrl(
   try {
     const pagesRes = await axios.get(`${baseURL}/pages`, {
       params: { slug, _embed: false },
+      headers: browserHeaders,
       timeout: 30000,
     });
     console.log('[getPostByUrl] pages response:', pagesRes.status, 'count:', pagesRes.data?.length);
