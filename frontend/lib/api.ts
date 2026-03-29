@@ -8,6 +8,10 @@ import type {
   ContentScoreBreakdown,
   ContentBrief,
   CannibalizationResult,
+  RankHistoryResponse,
+  SiteRankingsResponse,
+  InternalLinksResponse,
+  ApplyLinksResult,
   Site,
   GSCOverview,
   SubscriptionStatus,
@@ -91,6 +95,12 @@ export const pagesApi = {
 
   getCannibalization: (siteId: string, minImpressions = 5) =>
     apiClient.get<CannibalizationResult>(`/pages/cannibalization/${siteId}`, { params: { minImpressions } }),
+
+  getInternalLinks: (siteId: string) =>
+    apiClient.get<InternalLinksResponse>(`/pages/internal-links/${siteId}`),
+
+  applyInternalLinks: (pageId: string, links: Array<{ anchorText: string; targetUrl: string; targetTitle: string }>) =>
+    apiClient.post<ApplyLinksResult>(`/pages/${pageId}/apply-internal-links`, { links }),
 };
 
 // ─── GSC ─────────────────────────────────────────────────────────────────────
@@ -118,6 +128,12 @@ export const gscApi = {
       `/gsc/daily/${siteId}`,
       { params: { days } }
     ),
+
+  getRankHistory: (pageId: string, days = 60) =>
+    apiClient.get<RankHistoryResponse>(`/gsc/rank-history/${pageId}`, { params: { days } }),
+
+  getRankings: (siteId: string) =>
+    apiClient.get<SiteRankingsResponse>(`/gsc/rankings/${siteId}`),
 };
 
 // ─── Optimizer ───────────────────────────────────────────────────────────────

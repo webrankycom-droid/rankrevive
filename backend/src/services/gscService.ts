@@ -229,6 +229,85 @@ export async function fetchDailyTraffic(
   return data;
 }
 
+// ─── Rank History ─────────────────────────────────────────────────────────────
+
+export interface RankHistoryPoint {
+  snapshotDate: string;
+  position: number;
+  impressions: number;
+  clicks: number;
+}
+
+export interface KeywordRankHistory {
+  keyword: string;
+  currentPosition: number;
+  prevPosition: number | null;
+  positionChange: number | null;
+  history: RankHistoryPoint[];
+}
+
+export async function getRankHistory(
+  pageId: string,
+  days = 60
+): Promise<KeywordRankHistory[]> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const cutoffDate = cutoff.toISOString().split('T')[0];
+
+  // Current keyword positions
+  const current = await query<{
+    keyword: string;
+    position: string;
+    prev_position: string | null;
+    impressions: string;
+  }>(
+    'SELECT keyword, position, prev_position, impressions FROM keywords WHERE page_id = $1 ORDER BY impressions DESC LIMIT 15',
+    [pageId]
+  );
+
+  if (!current.length) return [];
+
+  // History snapshots
+  const history = await query<{
+    keyword: string;
+    position: string;
+    impressions: string;
+    clicks: string;
+    snapshot_date: string;
+  }>(
+    `SELECT keyword, position, impressions, clicks, snapshot_date
+     FROM keyword_position_history
+     WHERE page_id = $1 AND snapshot_date >= $2
+     ORDER BY keyword, snapshot_date ASC`,
+    [pageId, cutoffDate]
+  );
+
+  // Group history by keyword
+  const historyByKw: Record<string, RankHistoryPoint[]> = {};
+  for (const row of history) {
+    if (!historyByKw[row.keyword]) historyByKw[row.keyword] = [];
+    historyByKw[row.keyword].push({
+      snapshotDate: row.snapshot_date,
+      position: parseFloat(row.position),
+      impressions: parseInt(row.impressions),
+      clicks: parseInt(row.clicks),
+    });
+  }
+
+  return current.map((k) => {
+    const posChange = k.prev_position !== null
+      ? parseFloat(k.prev_position) - parseFloat(k.position)
+      : null;
+    return {
+      keyword: k.keyword,
+      currentPosition: parseFloat(k.position),
+      prevPosition: k.prev_position !== null ? parseFloat(k.prev_position) : null,
+      positionChange: posChange !== null ? parseFloat(posChange.toFixed(1)) : null,
+      history: historyByKw[k.keyword] || [],
+    };
+  });
+}
+
 export async function syncSitePages(siteId: string): Promise<{ synced: number; errors: number }> {
   const site = await queryOne<{
     gsc_property: string;
@@ -267,7 +346,7 @@ export async function syncSitePages(siteId: string): Promise<{ synced: number; e
       );
 
       if (dbPage) {
-        // Fetch and store keywords
+        // Fetch fresh keyword data from GSC
         const keywords = await fetchKeywordsForPage(
           page.url,
           site.gsc_property,
@@ -275,15 +354,44 @@ export async function syncSitePages(siteId: string): Promise<{ synced: number; e
           site.gsc_refresh_token
         );
 
-        // Delete old keywords for this page
+        // ── Snapshot current positions for rank history BEFORE deleting ──
+        // Also snapshot into keyword_position_history for time-series charts
+        const today = new Date().toISOString().split('T')[0];
+        const existing = await query<{ keyword: string; position: string; impressions: string; clicks: string; ctr: string }>(
+          'SELECT keyword, position, impressions, clicks, ctr FROM keywords WHERE page_id = $1',
+          [dbPage.id]
+        );
+
+        if (existing.length > 0) {
+          for (const row of existing) {
+            // Save to history (upsert — one snapshot per day per keyword)
+            await query(
+              `INSERT INTO keyword_position_history (page_id, keyword, position, impressions, clicks, ctr, snapshot_date)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               ON CONFLICT (page_id, keyword, snapshot_date) DO UPDATE
+               SET position = EXCLUDED.position,
+                   impressions = EXCLUDED.impressions,
+                   clicks = EXCLUDED.clicks`,
+              [dbPage.id, row.keyword, row.position, row.impressions, row.clicks, row.ctr, today]
+            );
+          }
+        }
+
+        // Build prev_position map from existing keywords
+        const prevPositionMap: Record<string, number> = {};
+        for (const row of existing) {
+          prevPositionMap[row.keyword] = parseFloat(row.position);
+        }
+
+        // Delete old keywords then reinsert with prev_position
         await query('DELETE FROM keywords WHERE page_id = $1', [dbPage.id]);
 
-        // Insert new keywords
         for (const kw of keywords) {
           await query(
-            `INSERT INTO keywords (page_id, keyword, impressions, clicks, ctr, position, date_range)
-             VALUES ($1, $2, $3, $4, $5, $6, '90d')`,
-            [dbPage.id, kw.keyword, kw.impressions, kw.clicks, kw.ctr, kw.position]
+            `INSERT INTO keywords (page_id, keyword, impressions, clicks, ctr, position, prev_position, date_range)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, '90d')`,
+            [dbPage.id, kw.keyword, kw.impressions, kw.clicks, kw.ctr, kw.position,
+             prevPositionMap[kw.keyword] ?? null]
           );
         }
       }
@@ -306,4 +414,5 @@ export const gscService = {
   fetchDailyTraffic,
   fetchKeywordsForPage,
   syncSitePages,
+  getRankHistory,
 };

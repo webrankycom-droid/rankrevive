@@ -14,6 +14,8 @@ import {
   TrendingUp,
   ChevronRight,
   AlertTriangle,
+  BarChart2,
+  Link2,
 } from 'lucide-react';
 import { cn, getPlanBadgeClass } from '@/lib/utils';
 
@@ -21,6 +23,8 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/pages', icon: FileText, label: 'Pages' },
   { href: '/dashboard/keywords', icon: Search, label: 'Keywords' },
+  { href: '/dashboard/rankings', icon: BarChart2, label: 'Rank Tracker' },
+  { href: '/dashboard/internal-links', icon: Link2, label: 'Internal Links' },
   { href: '/dashboard/cannibalization', icon: AlertTriangle, label: 'Cannibalization' },
   { href: '/dashboard/history', icon: History, label: 'History' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },

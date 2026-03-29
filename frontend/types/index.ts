@@ -173,6 +173,81 @@ export interface OptimizationResult {
   tokensUsed: number;
 }
 
+// ─── Rank Tracking ───────────────────────────────────────────────────────────
+
+export interface RankHistoryPoint {
+  snapshotDate: string;
+  position: number;
+  impressions: number;
+  clicks: number;
+}
+
+export interface KeywordRankHistory {
+  keyword: string;
+  currentPosition: number;
+  prevPosition: number | null;
+  positionChange: number | null;
+  history: RankHistoryPoint[];
+}
+
+export interface RankHistoryResponse {
+  pageId: string;
+  pageTitle: string;
+  pageUrl: string;
+  keywords: KeywordRankHistory[];
+}
+
+export interface RankingPage {
+  pageId: string;
+  url: string;
+  title: string;
+  contentScore: number | null;
+  status: string;
+  keywordCount: number;
+  avgPosition: number | null;
+  avgPrevPosition: number | null;
+  positionDelta: number | null;
+  totalImpressions: number;
+  totalClicks: number;
+}
+
+export interface SiteRankingsResponse {
+  siteId: string;
+  domain: string;
+  pages: RankingPage[];
+}
+
+// ─── Internal Linking ─────────────────────────────────────────────────────────
+
+export interface InternalLinkSuggestion {
+  sourcePageId: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  targetPageId: string;
+  targetUrl: string;
+  targetTitle: string;
+  anchorText: string;
+  impressions: number;
+  targetPosition: number;
+  reason: string;
+}
+
+export interface InternalLinksResponse {
+  siteId: string;
+  domain: string;
+  suggestions: InternalLinkSuggestion[];
+  total: number;
+  message?: string;
+}
+
+export interface ApplyLinksResult {
+  success: boolean;
+  appliedCount: number;
+  appliedLinks: string[];
+  updatedContent?: string;
+  message?: string;
+}
+
 // ─── Cannibalization ──────────────────────────────────────────────────────────
 
 export interface CannibalizedPage {

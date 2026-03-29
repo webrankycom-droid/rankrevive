@@ -93,6 +93,201 @@ router.post('/sites', authenticate, async (req: AuthRequest, res: Response): Pro
   }
 });
 
+// ─── Internal Linking ─────────────────────────────────────────────────────────
+// Finds opportunities to link between pages on the same site based on
+// keyword overlap — pages that should be linked but aren't yet.
+
+router.get('/internal-links/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { siteId } = req.params;
+    const site = await queryOne<{ id: string; domain: string }>(
+      'SELECT id, domain FROM sites WHERE id = $1 AND user_id = $2',
+      [siteId, req.user!.userId]
+    );
+    if (!site) { res.status(404).json({ error: 'Site not found' }); return; }
+
+    // Get all pages with content AND their top keywords
+    const pages = await query<{ id: string; url: string; title: string; current_content: string }>(
+      `SELECT id, url, title, current_content
+       FROM pages WHERE site_id = $1 AND current_content IS NOT NULL AND length(current_content) > 100
+       LIMIT 100`,
+      [siteId]
+    );
+
+    if (pages.length < 2) {
+      res.json({ siteId, domain: site.domain, suggestions: [], total: 0,
+        message: 'Need at least 2 pages with content to find internal link opportunities.' });
+      return;
+    }
+
+    // Get top keywords for each page
+    const pageIds = pages.map(p => `'${p.id}'`).join(',');
+    const keywords = await query<{ page_id: string; keyword: string; impressions: number; position: number }>(
+      `SELECT page_id, keyword, impressions, position
+       FROM keywords
+       WHERE page_id IN (${pageIds}) AND impressions >= 5
+       ORDER BY page_id, impressions DESC`,
+      []
+    );
+
+    // Group top-3 keywords per page
+    const kwByPage: Record<string, Array<{ keyword: string; impressions: number; position: number }>> = {};
+    for (const kw of keywords) {
+      if (!kwByPage[kw.page_id]) kwByPage[kw.page_id] = [];
+      if (kwByPage[kw.page_id].length < 5) kwByPage[kw.page_id].push(kw);
+    }
+
+    const suggestions: Array<{
+      sourcePageId: string;
+      sourceUrl: string;
+      sourceTitle: string;
+      targetPageId: string;
+      targetUrl: string;
+      targetTitle: string;
+      anchorText: string;
+      impressions: number;
+      targetPosition: number;
+      reason: string;
+    }> = [];
+
+    // For each page B (source), check if it mentions top keywords of page A (target)
+    for (const sourceP of pages) {
+      const contentLower = sourceP.current_content.toLowerCase();
+
+      for (const targetP of pages) {
+        if (targetP.id === sourceP.id) continue;
+
+        // Skip if source already links to target URL
+        if (sourceP.current_content.includes(targetP.url)) continue;
+
+        const targetKws = kwByPage[targetP.id] || [];
+        for (const kw of targetKws) {
+          const kwLower = kw.keyword.toLowerCase();
+          // Check if keyword appears as plain text in source content
+          if (contentLower.includes(kwLower)) {
+            // Make sure it's not already inside an anchor pointing to target
+            const alreadyLinked = new RegExp(
+              `<a[^>]*>[^<]*${kw.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^<]*<\\/a>`,
+              'i'
+            ).test(sourceP.current_content);
+            if (!alreadyLinked) {
+              suggestions.push({
+                sourcePageId: sourceP.id,
+                sourceUrl: sourceP.url,
+                sourceTitle: sourceP.title || sourceP.url,
+                targetPageId: targetP.id,
+                targetUrl: targetP.url,
+                targetTitle: targetP.title || targetP.url,
+                anchorText: kw.keyword,
+                impressions: kw.impressions,
+                targetPosition: kw.position,
+                reason: `"${kw.keyword}" gets ${kw.impressions} impressions/mo and appears in this page's text — link it to the ranking page`,
+              });
+              break; // One suggestion per source→target pair
+            }
+          }
+        }
+      }
+    }
+
+    // Sort by impressions (highest impact first)
+    suggestions.sort((a, b) => b.impressions - a.impressions);
+
+    res.json({
+      siteId,
+      domain: site.domain,
+      suggestions: suggestions.slice(0, 80),
+      total: suggestions.length,
+    });
+  } catch (err: unknown) {
+    console.error('[INTERNAL LINKS ERROR]', (err as Error).message);
+    res.status(500).json({ error: 'Failed to analyze internal links' });
+  }
+});
+
+// POST /api/pages/:pageId/apply-internal-links
+// Auto-inject <a> tags into page content based on provided link suggestions.
+
+router.post('/:pageId/apply-internal-links', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { pageId } = req.params;
+    const { links } = req.body as {
+      links: Array<{ anchorText: string; targetUrl: string; targetTitle: string }>;
+    };
+
+    if (!links?.length) { res.status(400).json({ error: 'No links provided' }); return; }
+
+    const page = await queryOne<{ id: string; current_content: string; optimized_content: string }>(
+      `SELECT p.id, p.current_content, p.optimized_content
+       FROM pages p JOIN sites s ON p.site_id = s.id
+       WHERE p.id = $1 AND s.user_id = $2`,
+      [pageId, req.user!.userId]
+    );
+    if (!page) { res.status(404).json({ error: 'Page not found' }); return; }
+
+    // Use optimized_content if available, otherwise current_content
+    let content = page.optimized_content || page.current_content;
+    if (!content) { res.status(400).json({ error: 'No content to apply links to' }); return; }
+
+    let appliedCount = 0;
+    const appliedLinks: string[] = [];
+
+    for (const link of links) {
+      const { anchorText, targetUrl } = link;
+      if (!anchorText || !targetUrl) continue;
+
+      const escaped = anchorText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+      // Only replace inside <p> tags — never in headings or existing anchors
+      let applied = false;
+      content = content.replace(/<p([^>]*)>([\s\S]*?)<\/p>/gi, (match, attrs, inner) => {
+        if (applied) return match;
+        // Skip if paragraph already links to this URL
+        if (inner.includes(targetUrl)) return match;
+        // Skip if anchor with this text already exists
+        if (new RegExp(`<a[^>]*>[^<]*${escaped}[^<]*<\\/a>`, 'i').test(inner)) return match;
+
+        // Replace first occurrence of plain text (not inside any HTML tag)
+        const textRegex = new RegExp(
+          `(?<![=\\w"'>-])(${escaped})(?![\\w"'<])`,
+          'i'
+        );
+        const newInner = inner.replace(textRegex, (m: string) => {
+          applied = true;
+          return `<a href="${targetUrl}" title="${link.targetTitle}">${m}</a>`;
+        });
+
+        if (applied) return `<p${attrs}>${newInner}</p>`;
+        return match;
+      });
+
+      if (applied) {
+        appliedCount++;
+        appliedLinks.push(`"${anchorText}" → ${targetUrl}`);
+      }
+    }
+
+    if (appliedCount === 0) {
+      res.json({ success: false, message: 'No link positions found in content', appliedCount: 0 });
+      return;
+    }
+
+    // Save updated content
+    const field = page.optimized_content ? 'optimized_content' : 'current_content';
+    await query(`UPDATE pages SET ${field} = $1, updated_at = NOW() WHERE id = $2`, [content, pageId]);
+
+    res.json({
+      success: true,
+      appliedCount,
+      appliedLinks,
+      updatedContent: content,
+    });
+  } catch (err: unknown) {
+    console.error('[APPLY LINKS ERROR]', (err as Error).message);
+    res.status(500).json({ error: 'Failed to apply internal links' });
+  }
+});
+
 // ─── Keyword Cannibalization Detector ────────────────────────────────────────
 // Finds keywords where 2+ pages on the same site compete for the same ranking.
 // Cannibalization splits Google's ranking signals and hurts all involved pages.
