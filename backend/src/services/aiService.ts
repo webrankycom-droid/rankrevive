@@ -34,9 +34,18 @@ async function getOpenAI(): Promise<OpenAI> {
 
 export type AIProvider = 'claude' | 'openai';
 
+export interface KeywordData {
+  keyword: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number;
+}
+
 export interface OptimizationInput {
   content: string;
   keywords: string[];
+  keywordData?: KeywordData[];   // Full GSC data for smart prioritization
   pageUrl: string;
   pageTitle?: string;
   targetPosition?: number;
@@ -51,9 +60,55 @@ export interface OptimizationResult {
 }
 
 function buildSEOPrompt(input: OptimizationInput): string {
-  const { content, keywords, pageUrl, pageTitle, targetPosition } = input;
+  const { content, keywords, keywordData, pageUrl, pageTitle, targetPosition } = input;
   const primaryKeyword = keywords[0] || '';
-  const secondaryKeywords = keywords.slice(1, 6).join(', ');
+
+  // Build GSC keyword intelligence section if full data is available
+  let keywordSection = '';
+  if (keywordData && keywordData.length > 0) {
+    // Categorize keywords by opportunity
+    const quickWins = keywordData.filter(k => k.position > 10 && k.position <= 30 && k.impressions > 5)
+      .sort((a, b) => b.impressions - a.impressions);
+    const protecting = keywordData.filter(k => k.position <= 10)
+      .sort((a, b) => a.position - b.position);
+    const lowCtr = keywordData.filter(k => k.impressions > 10 && k.ctr < 0.03 && k.position <= 20)
+      .sort((a, b) => b.impressions - a.impressions);
+    const allOthers = keywordData.filter(k =>
+      !quickWins.includes(k) && !protecting.includes(k) && !lowCtr.includes(k)
+    );
+
+    keywordSection = `
+## Google Search Console Keyword Intelligence
+These are REAL keywords Google is already showing this page for. Use ALL of them naturally.
+
+### 🎯 Quick Win Keywords (position 11–30, high search volume — push these to page 1)
+${quickWins.length > 0
+  ? quickWins.map(k => `- "${k.keyword}" — pos ${k.position.toFixed(0)}, ${k.impressions} impressions/mo → Use prominently in H2/H3 headings and body`).join('\n')
+  : '- None in this range'}
+
+### ✅ Protecting (already ranking top 10 — keep these ranking signals intact)
+${protecting.length > 0
+  ? protecting.map(k => `- "${k.keyword}" — pos ${k.position.toFixed(1)}, ${k.clicks} clicks/mo → Maintain this keyword density`).join('\n')
+  : '- None'}
+
+### 💡 High Impression / Low CTR (Google shows page but users don't click — fix search intent match)
+${lowCtr.length > 0
+  ? lowCtr.map(k => `- "${k.keyword}" — ${k.impressions} impressions, ${(k.ctr * 100).toFixed(1)}% CTR → Rewrite H1/intro to better match what searchers want`).join('\n')
+  : '- None'}
+
+### Additional GSC Keywords (weave naturally throughout)
+${allOthers.length > 0
+  ? allOthers.map(k => `- "${k.keyword}" (${k.impressions} impr, pos ${k.position.toFixed(0)})`).join('\n')
+  : '- None'}
+`;
+  } else {
+    // Fallback to simple keyword list
+    keywordSection = `
+## Target Keywords
+- Primary: ${primaryKeyword}
+- Secondary: ${keywords.slice(1, 10).join(', ')}
+`;
+  }
 
   return `You are an expert SEO content optimizer. Your task is to rewrite and optimize the following web page content to improve its Google Search ranking.
 
@@ -61,23 +116,21 @@ function buildSEOPrompt(input: OptimizationInput): string {
 - URL: ${pageUrl}
 - Current Title: ${pageTitle || 'Not provided'}
 - Primary Keyword: ${primaryKeyword}
-- Secondary Keywords: ${secondaryKeywords}
 - Target Position: ${targetPosition ? `Top ${targetPosition}` : 'Top 10'}
-
+${keywordSection}
 ## Optimization Requirements
 
-1. **Keyword Integration**: Naturally incorporate the primary keyword in:
-   - The H1 heading (if not already present)
-   - First paragraph (within first 100 words)
-   - At least 2-3 subheadings (H2/H3)
-   - Throughout body text at ~1-2% density (not keyword stuffed)
-   - Last paragraph
+1. **Keyword Integration** — Use ALL keywords from the GSC list above naturally:
+   - Primary keyword in H1, first 100 words, 2–3 subheadings, last paragraph (~1.5% density)
+   - Quick Win keywords in H2/H3 headings and dedicated sections
+   - Low-CTR keywords addressed in the intro (match what searchers actually want)
+   - All other GSC keywords woven naturally into body paragraphs — do NOT ignore them
 
 2. **Content Structure**:
-   - Clear H1 -> H2 -> H3 hierarchy
-   - Short paragraphs (3-5 sentences max)
+   - Clear H1 → H2 → H3 hierarchy
+   - Short paragraphs (3–5 sentences max)
    - Bullet points or numbered lists where appropriate
-   - Add a FAQ section at the end with 3-5 relevant questions if content length allows
+   - Add a FAQ section at the end using 3–5 questions based on the GSC keywords (these reflect what people actually search)
 
 3. **E-E-A-T Signals**:
    - Add specific statistics, data points, or cite authoritative sources
@@ -86,15 +139,14 @@ function buildSEOPrompt(input: OptimizationInput): string {
    - Demonstrate firsthand experience where relevant
 
 4. **Readability**:
-   - Flesch-Kincaid Grade Level: 8-10 (accessible but professional)
+   - Flesch-Kincaid Grade Level: 8–10 (accessible but professional)
    - Use active voice predominantly
-   - Vary sentence length (mix short punchy sentences with longer detailed ones)
+   - Vary sentence length
    - Add transition words for flow
 
 5. **Additional SEO Elements**:
    - Suggest internal linking opportunities with [INTERNAL LINK: topic] markers
-   - Bold important phrases (2-4 per section)
-   - Include secondary keywords naturally throughout
+   - Bold important phrases (2–4 per section)
 
 ## Output Format
 Return ONLY the optimized HTML content. Use proper semantic HTML:
@@ -105,14 +157,14 @@ Return ONLY the optimized HTML content. Use proper semantic HTML:
 - <ul>/<ol> for lists
 - <strong> for important phrases
 - <section> to wrap major content blocks
-- Include a <div class="faq-section"> for FAQ if applicable
+- Include a <div class="faq-section"> for FAQ
 
 Do not include <html>, <head>, or <body> tags. Only the content HTML.
 
 ## Original Content to Optimize:
 ${content}
 
-Remember: The optimized content must read naturally to humans while being strategically optimized for search engines. Do not stuff keywords artificially.`;
+Remember: The optimized content must read naturally to humans while being strategically optimized for search engines. Do not stuff keywords artificially. Every GSC keyword listed above is a real search query — treat them as user intent signals.`;
 }
 
 export async function optimizeWithClaude(input: OptimizationInput): Promise<OptimizationResult> {

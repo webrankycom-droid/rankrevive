@@ -36,8 +36,8 @@ router.post(
       return;
     }
 
-    const keywords = await query<{ keyword: string; position: number; impressions: number }>(
-      'SELECT keyword, position, impressions FROM keywords WHERE page_id = $1 ORDER BY impressions DESC LIMIT 20',
+    const keywords = await query<{ keyword: string; position: number; impressions: number; clicks: number; ctr: number }>(
+      'SELECT keyword, position, impressions, clicks, ctr FROM keywords WHERE page_id = $1 ORDER BY impressions DESC LIMIT 30',
       [pageId]
     );
     const kwList = keywords.map((k) => k.keyword);
@@ -50,6 +50,13 @@ router.post(
         {
           content: page.current_content,
           keywords: kwList,
+          keywordData: keywords.map(k => ({
+            keyword: k.keyword,
+            impressions: k.impressions || 0,
+            clicks: k.clicks || 0,
+            ctr: k.ctr || 0,
+            position: k.position || 99,
+          })),
           pageUrl: page.url,
           pageTitle: page.title,
         },
