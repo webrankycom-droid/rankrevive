@@ -118,9 +118,11 @@ export default function ContentScore({ score, loading, compact = false }: Conten
           {loading
             ? [...Array(14)].map((_, i) => <MetricRow key={i} metric={{} as ScoreMetric} loading />)
             : score
-            ? Object.values(score.metrics).map((metric) => (
-                <MetricRow key={metric.label} metric={metric} />
-              ))
+            ? Object.values(score.metrics)
+                .filter((metric): metric is ScoreMetric => !!metric)
+                .map((metric) => (
+                  <MetricRow key={metric.label} metric={metric} />
+                ))
             : null}
         </div>
       )}

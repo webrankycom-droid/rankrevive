@@ -93,6 +93,137 @@ router.post('/sites', authenticate, async (req: AuthRequest, res: Response): Pro
   }
 });
 
+// ─── Keyword Cannibalization Detector ────────────────────────────────────────
+// Finds keywords where 2+ pages on the same site compete for the same ranking.
+// Cannibalization splits Google's ranking signals and hurts all involved pages.
+
+router.get('/cannibalization/:siteId', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { siteId } = req.params;
+    const { minImpressions = 5 } = req.query;
+
+    // Verify user owns this site
+    const site = await queryOne<{ id: string; domain: string }>(
+      'SELECT id, domain FROM sites WHERE id = $1 AND user_id = $2',
+      [siteId, req.user!.userId]
+    );
+    if (!site) { res.status(404).json({ error: 'Site not found' }); return; }
+
+    // Find keywords with 2+ pages competing
+    const conflicts = await query<{
+      keyword: string;
+      page_count: string;
+      total_impressions: string;
+      total_clicks: string;
+      best_position: string;
+    }>(
+      `SELECT k.keyword,
+              COUNT(DISTINCT k.page_id) AS page_count,
+              SUM(k.impressions) AS total_impressions,
+              SUM(k.clicks) AS total_clicks,
+              MIN(k.position) AS best_position
+       FROM keywords k
+       JOIN pages p ON k.page_id = p.id
+       WHERE p.site_id = $1 AND k.impressions >= $2
+       GROUP BY k.keyword
+       HAVING COUNT(DISTINCT k.page_id) > 1
+       ORDER BY SUM(k.impressions) DESC
+       LIMIT 50`,
+      [siteId, Number(minImpressions)]
+    );
+
+    if (!conflicts.length) {
+      res.json({ siteId, domain: site.domain, conflicts: [], total: 0 });
+      return;
+    }
+
+    // For each conflicting keyword, get the competing pages
+    const keywords = conflicts.map(c => c.keyword);
+    const pageDetails = await query<{
+      keyword: string;
+      page_id: string;
+      page_url: string;
+      page_title: string;
+      impressions: number;
+      clicks: number;
+      position: number;
+      content_score: number | null;
+      status: string;
+    }>(
+      `SELECT k.keyword, p.id AS page_id, p.url AS page_url, p.title AS page_title,
+              k.impressions, k.clicks, k.position, p.content_score, p.status
+       FROM keywords k
+       JOIN pages p ON k.page_id = p.id
+       WHERE p.site_id = $1 AND k.keyword = ANY($2)
+       ORDER BY k.keyword, k.impressions DESC`,
+      [siteId, keywords]
+    );
+
+    // Group page details by keyword
+    const pagesByKeyword: Record<string, typeof pageDetails> = {};
+    for (const row of pageDetails) {
+      if (!pagesByKeyword[row.keyword]) pagesByKeyword[row.keyword] = [];
+      pagesByKeyword[row.keyword].push(row);
+    }
+
+    // Build structured conflict groups
+    const result = conflicts.map(c => {
+      const pages = pagesByKeyword[c.keyword] || [];
+      const winner = pages[0]; // highest impressions = current "winner"
+      const losers = pages.slice(1);
+
+      // Calculate cannibalization severity
+      const positionSpread = pages.length > 1
+        ? Math.max(...pages.map(p => p.position)) - Math.min(...pages.map(p => p.position))
+        : 0;
+
+      const severity: 'high' | 'medium' | 'low' =
+        Number(c.total_impressions) > 100 || pages.length >= 3 ? 'high' :
+        Number(c.total_impressions) > 30 ? 'medium' : 'low';
+
+      return {
+        keyword: c.keyword,
+        pageCount: Number(c.page_count),
+        totalImpressions: Number(c.total_impressions),
+        totalClicks: Number(c.total_clicks),
+        bestPosition: Number(c.best_position),
+        severity,
+        positionSpread: Math.round(positionSpread),
+        recommendation: pages.length >= 3
+          ? `Consolidate into one authoritative page — ${pages.length} pages are splitting signals`
+          : winner && Math.min(...pages.map(p => p.position)) <= 10
+          ? `Canonical tag: keep "${winner.page_url}" as primary, add canonical from "${losers[0]?.page_url}"`
+          : `Merge "${losers[0]?.page_url}" content into "${winner?.page_url}" and 301 redirect`,
+        pages: pages.map(p => ({
+          pageId: p.page_id,
+          url: p.page_url,
+          title: p.page_title,
+          impressions: p.impressions,
+          clicks: p.clicks,
+          position: Number(p.position),
+          contentScore: p.content_score,
+          status: p.status,
+        })),
+      };
+    });
+
+    res.json({
+      siteId,
+      domain: site.domain,
+      conflicts: result,
+      total: result.length,
+      summary: {
+        high: result.filter(r => r.severity === 'high').length,
+        medium: result.filter(r => r.severity === 'medium').length,
+        low: result.filter(r => r.severity === 'low').length,
+      },
+    });
+  } catch (err: unknown) {
+    console.error('[CANNIBALIZATION ERROR]', (err as Error).message);
+    res.status(500).json({ error: 'Failed to analyze cannibalization' });
+  }
+});
+
 // GET /api/pages/:id - Get single page with keywords
 router.get('/:id', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {

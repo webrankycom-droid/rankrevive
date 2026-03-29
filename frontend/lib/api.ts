@@ -7,6 +7,7 @@ import type {
   OptimizationResult,
   ContentScoreBreakdown,
   ContentBrief,
+  CannibalizationResult,
   Site,
   GSCOverview,
   SubscriptionStatus,
@@ -87,6 +88,9 @@ export const pagesApi = {
     apiClient.put(`/pages/${id}/content`, data),
 
   delete: (id: string) => apiClient.delete(`/pages/${id}`),
+
+  getCannibalization: (siteId: string, minImpressions = 5) =>
+    apiClient.get<CannibalizationResult>(`/pages/cannibalization/${siteId}`, { params: { minImpressions } }),
 };
 
 // ─── GSC ─────────────────────────────────────────────────────────────────────

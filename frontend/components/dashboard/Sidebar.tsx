@@ -6,7 +6,6 @@ import { signOut, useSession } from 'next-auth/react';
 import {
   LayoutDashboard,
   FileText,
-  Sparkles,
   Search,
   History,
   Settings,
@@ -14,6 +13,7 @@ import {
   LogOut,
   TrendingUp,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn, getPlanBadgeClass } from '@/lib/utils';
 
@@ -21,6 +21,7 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/pages', icon: FileText, label: 'Pages' },
   { href: '/dashboard/keywords', icon: Search, label: 'Keywords' },
+  { href: '/dashboard/cannibalization', icon: AlertTriangle, label: 'Cannibalization' },
   { href: '/dashboard/history', icon: History, label: 'History' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];

@@ -173,6 +173,39 @@ export interface OptimizationResult {
   tokensUsed: number;
 }
 
+// ─── Cannibalization ──────────────────────────────────────────────────────────
+
+export interface CannibalizedPage {
+  pageId: string;
+  url: string;
+  title: string;
+  impressions: number;
+  clicks: number;
+  position: number;
+  contentScore: number | null;
+  status: string;
+}
+
+export interface CannibalizationConflict {
+  keyword: string;
+  pageCount: number;
+  totalImpressions: number;
+  totalClicks: number;
+  bestPosition: number;
+  severity: 'high' | 'medium' | 'low';
+  positionSpread: number;
+  recommendation: string;
+  pages: CannibalizedPage[];
+}
+
+export interface CannibalizationResult {
+  siteId: string;
+  domain: string;
+  conflicts: CannibalizationConflict[];
+  total: number;
+  summary: { high: number; medium: number; low: number };
+}
+
 // ─── Dashboard Stats ─────────────────────────────────────────────────────────
 
 export interface DashboardStats {
