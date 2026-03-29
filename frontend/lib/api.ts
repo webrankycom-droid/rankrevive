@@ -6,6 +6,7 @@ import type {
   Optimization,
   OptimizationResult,
   ContentScoreBreakdown,
+  ContentBrief,
   Site,
   GSCOverview,
   SubscriptionStatus,
@@ -120,6 +121,9 @@ export const gscApi = {
 export const optimizerApi = {
   optimize: (pageId: string, provider: 'claude' | 'openai' = 'claude') =>
     apiClient.post<OptimizationResult>(`/optimizer/${pageId}/optimize`, { provider }),
+
+  getBrief: (pageId: string) =>
+    apiClient.get<ContentBrief>(`/optimizer/${pageId}/brief`),
 
   score: (pageId: string, contentType: 'current' | 'optimized' = 'current') =>
     apiClient.get<ContentScoreBreakdown>(`/optimizer/${pageId}/score`, { params: { contentType } }),

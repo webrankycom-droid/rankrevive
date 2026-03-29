@@ -116,7 +116,7 @@ export default function ContentScore({ score, loading, compact = false }: Conten
       {!compact && (
         <div className="divide-y divide-dark-700/50">
           {loading
-            ? [...Array(10)].map((_, i) => <MetricRow key={i} metric={{} as ScoreMetric} loading />)
+            ? [...Array(14)].map((_, i) => <MetricRow key={i} metric={{} as ScoreMetric} loading />)
             : score
             ? Object.values(score.metrics).map((metric) => (
                 <MetricRow key={metric.label} metric={metric} />

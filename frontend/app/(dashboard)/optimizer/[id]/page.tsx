@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Sparkles, Send, Download, RefreshCw,
-  Globe, Zap, ChevronRight, Info
+  Globe, Zap, ChevronRight, Info, FileText
 } from 'lucide-react';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import ContentEditor from '@/components/optimizer/ContentEditor';
 import ContentScore from '@/components/optimizer/ContentScore';
 import KeywordSuggestions from '@/components/optimizer/KeywordSuggestions';
 import BeforeAfterPreview from '@/components/optimizer/BeforeAfterPreview';
+import ContentBriefPanel from '@/components/optimizer/ContentBriefPanel';
 import { Badge, PositionBadge, StatusBadge } from '@/components/ui/Badge';
 import { pagesApi, optimizerApi, wordpressApi } from '@/lib/api';
 import { truncateUrl, formatRelativeDate, getScoreColor } from '@/lib/utils';
@@ -29,6 +30,7 @@ export default function OptimizerPage() {
   const [editedContent, setEditedContent] = useState('');
   const [provider, setProvider] = useState<AIProvider>('claude');
   const [activeTab, setActiveTab] = useState<'editor' | 'comparison' | 'score'>('editor');
+  const [showBrief, setShowBrief] = useState(true);
 
   // Fetch page data
   const { data: page, isLoading: pageLoading } = useQuery({
@@ -38,6 +40,14 @@ export default function OptimizerPage() {
 
   const keywords = page?.keywords || [];
   const targetedKeywords = optimizationResult?.targetedKeywords || [];
+
+  // Fetch content brief (SEO strategy)
+  const { data: brief, isLoading: briefLoading } = useQuery({
+    queryKey: ['brief', id],
+    queryFn: () => optimizerApi.getBrief(id).then((r) => r.data),
+    enabled: !!page && keywords.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Fetch content score
   const { data: currentScore, isLoading: scoreLoading } = useQuery({
@@ -287,6 +297,22 @@ export default function OptimizerPage() {
                 </>
               )}
             </div>
+
+            {/* Content Brief Panel */}
+            {(brief || briefLoading) && keywords.length > 0 && (
+              <div>
+                <button
+                  onClick={() => setShowBrief(!showBrief)}
+                  className="flex items-center gap-1.5 text-xs text-dark-400 hover:text-dark-200 transition-colors mb-2"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  {showBrief ? 'Hide SEO Brief' : 'Show SEO Brief'}
+                </button>
+                {showBrief && (
+                  <ContentBriefPanel brief={brief!} loading={briefLoading} />
+                )}
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="flex gap-1 bg-dark-900 rounded-lg border border-dark-700 p-1 w-fit">

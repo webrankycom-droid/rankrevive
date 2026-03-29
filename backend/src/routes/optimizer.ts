@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { query, queryOne, camelizeKeys } from '../db';
 import { authenticate, requireActiveSubscription, AuthRequest } from '../middleware/auth';
 import { aiLimiter } from '../middleware/rateLimit';
-import { optimizeContent, AIProvider, generateMetaTags } from '../services/aiService';
+import { optimizeContent, AIProvider, generateMetaTags, generateContentBrief } from '../services/aiService';
 import { contentScorer } from '../services/contentScorer';
 
 const router = Router();
@@ -94,6 +94,46 @@ router.post(
     });
   }
 );
+
+// ─── Content Brief ────────────────────────────────────────────────────────────
+// Returns a pre-optimization SEO strategy based on GSC keyword data.
+// Call this before "Run AI Optimization" to show the user what the AI will do.
+
+router.get('/:pageId/brief', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { pageId } = req.params;
+
+  const page = await queryOne<{ title: string; current_content: string; url: string; site_id: string }>(
+    `SELECT p.title, p.current_content, p.url, p.site_id
+     FROM pages p JOIN sites s ON p.site_id = s.id
+     WHERE p.id = $1 AND s.user_id = $2`,
+    [pageId, req.user!.userId]
+  );
+  if (!page) { res.status(404).json({ error: 'Page not found' }); return; }
+
+  const keywords = await query<{ keyword: string; position: number; impressions: number; clicks: number; ctr: number }>(
+    'SELECT keyword, position, impressions, clicks, ctr FROM keywords WHERE page_id = $1 ORDER BY impressions DESC LIMIT 30',
+    [pageId]
+  );
+
+  const currentWordCount = page.current_content
+    ? page.current_content.replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length
+    : 0;
+
+  const brief = generateContentBrief({
+    keywords: keywords.map(k => k.keyword),
+    keywordData: keywords.map(k => ({
+      keyword: k.keyword,
+      impressions: k.impressions || 0,
+      clicks: k.clicks || 0,
+      ctr: k.ctr || 0,
+      position: k.position || 99,
+    })),
+    pageTitle: page.title,
+    currentWordCount,
+  });
+
+  res.json(brief);
+});
 
 router.get('/:pageId/score', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   const { pageId } = req.params;

@@ -114,7 +114,34 @@ export interface ContentScoreBreakdown {
     paragraphStructure: ScoreMetric;
     titleOptimization: ScoreMetric;
     multimediaPresence: ScoreMetric;
+    // Advanced metrics
+    semanticCoverage?: ScoreMetric;
+    keywordInPositions?: ScoreMetric;
+    featuredSnippetReady?: ScoreMetric;
+    searchIntentMatch?: ScoreMetric;
   };
+}
+
+// ─── Content Brief ────────────────────────────────────────────────────────────
+
+export interface BriefKeyword {
+  keyword: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  position: number;
+}
+
+export interface ContentBrief {
+  detectedIntent: 'informational' | 'commercial' | 'transactional' | 'navigational';
+  recommendedWordCount: string;
+  primaryKeyword: string;
+  quickWins: BriefKeyword[];
+  questionsToAnswer: string[];
+  topicsTocover: string[];
+  featuredSnippetOpportunity: string;
+  contentGaps: string[];
+  competitorAngle: string;
 }
 
 // ─── API Responses ───────────────────────────────────────────────────────────
